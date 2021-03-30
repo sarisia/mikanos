@@ -1,0 +1,4 @@
+[submodule "mikan"]
+	path = mikan
+	url = https://github.com/uchan-nos/mikanos
+	ignore = all

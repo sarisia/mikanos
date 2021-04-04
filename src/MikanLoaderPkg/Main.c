@@ -4,6 +4,7 @@
 #include <Library/PrintLib.h>
 #include <Protocol/SimpleFileSystem.h>
 #include <Protocol/LoadedImage.h>
+#include <Guid/FileInfo.h>
 
 struct MemoryMap {
     UINTN buffer_size;
@@ -142,8 +143,70 @@ EFI_STATUS EFIAPI UefiMain(
 
     SaveMemoryMap(&memmap, memmap_file);
     memmap_file->Close(memmap_file);
+    Print(L"memmap saved.\n");
 
-    Print(L"All done...?\n");
+    // load kernel.elf
+    EFI_FILE_PROTOCOL *kernel_file;
+    root_dir->Open(
+        root_dir,
+        &kernel_file,
+        L"\\kernel.elf",
+        EFI_FILE_MODE_READ,
+        0
+    );
+
+    UINTN file_info_size = sizeof(EFI_FILE_INFO) + sizeof(CHAR16)*12;
+    UINT8 file_info_buf[file_info_size];
+    kernel_file->GetInfo(
+        kernel_file,
+        &gEfiFileInfoGuid,
+        &file_info_size, // in out
+        file_info_buf // out
+    );
+
+    EFI_FILE_INFO *file_info = (EFI_FILE_INFO *)file_info_buf;
+    UINTN kernel_file_size = file_info->FileSize;
+
+    EFI_PHYSICAL_ADDRESS kernel_base_address = 0x100000;
+    gBS->AllocatePages(
+        AllocateAddress,
+        EfiLoaderData,
+        (kernel_file_size + 0x0fff) / 0x1000, // 1 page = 4 KiB
+        &kernel_base_address // in out
+    );
+    kernel_file->Read(
+        kernel_file,
+        &kernel_file_size, // in out
+        (VOID *)kernel_base_address // out
+    );
+    Print(L"Kernel: 0x%0lx (%lu bytes)\n", kernel_base_address, kernel_file_size);
+
+    // want to print kernel entry point, so find it here
+    UINT64 entry_addr = *(UINT64 *)(kernel_base_address + 24);
+    Print(L"Kernel entry point: 0x%0lx\n", entry_addr);
+
+    // exit UEFI boot service
+    EFI_STATUS status;
+    status = gBS->ExitBootServices(image_handle, memmap.map_key);
+    if (EFI_ERROR(status)) {
+        Print(L"Failed to exit boot service (%r). Retry.\n", status);
+        
+        status = GetMemoryMap(&memmap);
+        if (EFI_ERROR(status)) {
+            Print(L"Failed to get memory map: %r\n", status);
+            while (1);
+        }
+        status = gBS->ExitBootServices(image_handle, memmap.map_key);
+        if (EFI_ERROR(status)) {
+            Print(L"Failed to exit boot service. Critical.\n");
+            while (1);
+        }
+    }
+
+    // start kernel
+    typedef void (*EntryPointType)(void);
+    EntryPointType entry_point = (EntryPointType)entry_addr;
+    (*entry_point)();
 
     while (1);
     return EFI_SUCCESS;

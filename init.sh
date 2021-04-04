@@ -6,7 +6,7 @@ current=$(pwd)
 
 export CONF_PATH=${workspace}/edk2/Conf
 
-ln -sf ${workspace}/MikanLoaderPkg ${edk2}
+ln -sf ${workspace}/src/MikanLoaderPkg ${edk2}
 
 cd ${edk2}
 source edksetup.sh

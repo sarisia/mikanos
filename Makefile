@@ -1,26 +1,17 @@
 .PHONY: all
-all: kernel
+all: run
 
-kernel: kernel.elf
-kernel.elf: src/kernel/main.cpp
-	clang++ ${CPPFLAGS} \
-		-O2 -Wall -g --target=x86_64-elf \
-		-ffreestanding \
-		-mno-red-zone \
-		-fno-exceptions \
-		-fno-rtti \
-		-std=c++17 \
-		-c src/kernel/main.cpp
-	ld.lld ${LDFLAGS} --entry KernelMain -z norelro --image-base=0x100000 --static \
-		-o kernel.elf main.o
+src/kernel/kernel.elf:
+	make -C src/kernel
 
-Build/MikanLoaderX64/DEBUG_CLANG38/X64/Loader.efi: src/MikanLoaderPkg/Main.c
+Build/MikanLoaderX64/DEBUG_CLANG38/X64/Loader.efi:
 	build
 
 .PHONY: run
-run: Build/MikanLoaderX64/DEBUG_CLANG38/X64/Loader.efi kernel.elf
-	${HOME}/osbook/devenv/run_qemu.sh Build/MikanLoaderX64/DEBUG_CLANG38/X64/Loader.efi kernel.elf
+run: Build/MikanLoaderX64/DEBUG_CLANG38/X64/Loader.efi src/kernel/kernel.elf
+	${HOME}/osbook/devenv/run_qemu.sh $^
 
 .PHONY: clean
 clean:
-	rm -f main.o kernel.elf
+	build cleanall
+	make -C src/kernel clean

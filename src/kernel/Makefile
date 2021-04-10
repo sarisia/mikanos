@@ -1,6 +1,7 @@
 TARGET=kernel.elf
 OBJS=main.o
 
+CPPFLAGS+=-I../Include
 CXXFLAGS+= \
 	-O2 -Wall -g --target=x86_64-elf \
 	-ffreestanding \

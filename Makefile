@@ -1,6 +1,8 @@
 .PHONY: all
-all: run
+all: kernel
 
+.PHONY: kernel src/kernel/kernel.elf
+kernel: src/kernel/kernel.elf
 src/kernel/kernel.elf:
 	make -C src/kernel
 

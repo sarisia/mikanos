@@ -3,7 +3,8 @@
         {
             "name": "Linux",
             "includePath": [
-                "/home/vscode/edk2/**"
+                "/home/vscode/edk2/**",
+                "${workspaceFolder}/src/Include/**"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/clang",

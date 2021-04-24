@@ -3,11 +3,13 @@
 #include <Library/UefiBootServicesTableLib.h>
 #include <Library/PrintLib.h>
 #include <Library/MemoryAllocationLib.h>
+#include <Library/BaseMemoryLib.h>
 #include <Protocol/SimpleFileSystem.h>
 #include <Protocol/LoadedImage.h>
 #include <Guid/FileInfo.h>
 
 #include "frame_buffer_config.hpp"
+#include "elf.hpp"
 
 struct MemoryMap {
     UINTN buffer_size;
@@ -50,6 +52,34 @@ const CHAR16 *GetPixelFormatUnicode(EFI_GRAPHICS_PIXEL_FORMAT format) {
         CASE_STRING(PixelBltOnly);
         CASE_STRING(PixelFormatMax);
         default: return L"InvalidPixelFormat";
+    }
+}
+
+void CalcLoadAddressRange(Elf64_Ehdr *ehdr, UINT64 *first, UINT64 *last) {
+    Elf64_Phdr *phdr = (Elf64_Phdr *)((UINT64)ehdr + ehdr->e_phoff);
+    *first = MAX_UINT64;
+    *last = 0;
+
+    // iterate over program headers
+    for (Elf64_Half i = 0; i < ehdr->e_phnum; ++i) {
+        if (phdr[i].p_type != PT_LOAD) continue;
+
+        *first = MIN(*first, phdr[i].p_vaddr);
+        *last = MAX(*last, phdr[i].p_vaddr + phdr[i].p_memsz);
+    }
+}
+
+void CopyLoadSegments(Elf64_Ehdr *ehdr) {
+    Elf64_Phdr *phdr = (Elf64_Phdr *)((UINT64)ehdr + ehdr->e_phoff);
+
+    for (Elf64_Half i = 0; i < ehdr->e_phnum; ++i) {
+        if (phdr[i].p_type != PT_LOAD) continue;
+
+        UINT64 seg_in_file = (UINT64)ehdr + phdr[i].p_offset;
+        CopyMem((VOID *)phdr[i].p_vaddr, (VOID *)seg_in_file, phdr[i].p_filesz);
+
+        UINTN remain_bytes = phdr[i].p_memsz - phdr[i].p_filesz;
+        SetMem((VOID *)(phdr[i].p_vaddr + phdr[i].p_filesz), remain_bytes, 0);
     }
 }
 
@@ -285,36 +315,62 @@ EFI_STATUS EFIAPI UefiMain(
         Halt();
     }
 
-
-
     EFI_FILE_INFO *file_info = (EFI_FILE_INFO *)file_info_buf;
     UINTN kernel_file_size = file_info->FileSize;
 
-    EFI_PHYSICAL_ADDRESS kernel_base_address = 0x100000;
-    status = gBS->AllocatePages(
-        AllocateAddress,
+    // 1. load kernel to temp buffer
+    VOID *kernel_buffer;
+    status = gBS->AllocatePool(
         EfiLoaderData,
-        (kernel_file_size + 0x0fff) / 0x1000, // 1 page = 4 KiB
-        &kernel_base_address // in out
+        kernel_file_size,
+        &kernel_buffer
     );
     if (EFI_ERROR(status)) {
-        Print(L"Failed to allocate pages: %r\n", status);
+        Print(L"Failed to allocate pool: %r\n", status);
         Halt();
     }
 
     status = kernel_file->Read(
         kernel_file,
         &kernel_file_size, // in out
-        (VOID *)kernel_base_address // out
+        kernel_buffer // out
     );
     if (EFI_ERROR(status)) {
         Print(L"File read error ('\\kernel.elf'): %r\n", status);
         Halt();
     }
-    Print(L"Kernel: 0x%0lx (%lu bytes)\n", kernel_base_address, kernel_file_size);
+    Print(L"Kernel buffer: 0x%0lx (%lu bytes)\n", kernel_buffer, kernel_file_size);
+
+    // 2. read kernel ELF header, calculate destination addr
+    Elf64_Ehdr *kernel_ehdr = (Elf64_Ehdr *)kernel_buffer;
+    UINT64 kernel_first_addr, kernel_last_addr;
+    CalcLoadAddressRange(kernel_ehdr, &kernel_first_addr, &kernel_last_addr);
+    Print(L"Kernel: 0x%0lx - 0x%0lx\n", kernel_first_addr, kernel_last_addr);
+
+    // 3. allocate pages, finalize kernel
+    UINTN num_pages = (kernel_last_addr - kernel_first_addr + 0xfff) / 0x1000;
+    status = gBS->AllocatePages(
+        AllocateAddress,
+        EfiLoaderData,
+        num_pages,
+        &kernel_first_addr // in out
+    );
+    if (EFI_ERROR(status)) {
+        Print(L"Failed to allocate kernel pages: %r\n", status);
+        Halt();
+    }
+
+    CopyLoadSegments(kernel_ehdr);
+
+    // free up kernel file buffer
+    status = gBS->FreePool(kernel_buffer);
+    if (EFI_ERROR(status)) {
+        Print(L"Failed to free pool: %r\n", status);
+        Halt();
+    }
 
     // want to print kernel entry point, so find it here
-    UINT64 entry_addr = *(UINT64 *)(kernel_base_address + 24);
+    UINT64 entry_addr = *(UINT64 *)(kernel_first_addr + 24);
     Print(L"Kernel entry point: 0x%0lx\n", entry_addr);
 
     // exit UEFI boot service

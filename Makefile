@@ -1,12 +1,14 @@
 .PHONY: all
-all: kernel
+all: kernel boot
 
 .PHONY: kernel src/kernel/kernel.elf
 kernel: src/kernel/kernel.elf
 src/kernel/kernel.elf:
 	make -C src/kernel
 
-Build/MikanLoaderX64/DEBUG_CLANG38/X64/Loader.efi:
+.PHONY: boot
+boot: Build/MikanLoaderX64/DEBUG_CLANG38/X64/Loader.efi
+Build/MikanLoaderX64/DEBUG_CLANG38/X64/Loader.efi: src/MikanLoaderPkg/Main.c
 	build
 
 .PHONY: run

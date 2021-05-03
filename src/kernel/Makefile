@@ -1,5 +1,5 @@
 TARGET=kernel.elf
-OBJS=main.o
+OBJS=main.o graphics.o font.o
 
 CPPFLAGS+=-I../Include
 CXXFLAGS+= \

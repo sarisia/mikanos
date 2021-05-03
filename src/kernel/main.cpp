@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <cstddef>
+#include <cstdio>
 
 #include "frame_buffer_config.hpp"
 #include "graphics.hpp"
@@ -48,6 +49,10 @@ void KernelMain(
     }
 
     WriteString(*pixel_writer, 0, 66, "Hello, world!", {0, 0, 255});
+
+    char buf[128];
+    sprintf(buf, "1 + 2 = %d", 1 + 2);
+    WriteString(*pixel_writer, 0, 84, buf, {255, 0, 0});
 
     while (1) {
         __asm__("hlt");

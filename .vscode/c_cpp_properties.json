@@ -3,6 +3,7 @@
         {
             "name": "Linux",
             "includePath": [
+                "/home/vscode/osbook/devenv/x86_64-elf/include",
                 "/home/vscode/edk2/**",
                 "${workspaceFolder}/src/Include/**"
             ],

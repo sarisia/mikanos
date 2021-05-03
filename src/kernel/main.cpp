@@ -47,8 +47,7 @@ void KernelMain(
         WriteAscii(*pixel_writer, 8*i, 50, c, {0, 0, 0});
     }
 
-    WriteAscii(*pixel_writer, 50, 66, 'A', { 0, 0, 0 });
-    WriteAscii(*pixel_writer, 58, 66, 'A', { 0, 0, 0 });
+    WriteString(*pixel_writer, 0, 66, "Hello, world!", {0, 0, 255});
 
     while (1) {
         __asm__("hlt");

@@ -30,3 +30,9 @@ void WriteAscii(PixelWriter& writer, int x, int y, char c, const PixelColor& col
         }
     }
 }
+
+void WriteString(PixelWriter& writer, int x, int y, const char* c, const PixelColor& color) {
+    for (int i = 0; c[i] != '\0'; ++i) {
+        WriteAscii(writer, x + 8*i, y, c[i], color);
+    }
+}

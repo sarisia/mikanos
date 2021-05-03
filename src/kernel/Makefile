@@ -1,5 +1,5 @@
 TARGET=kernel.elf
-OBJS=main.o graphics.o font.o
+OBJS=main.o graphics.o font.o hankaku.o
 
 CPPFLAGS+=-I../Include
 CXXFLAGS+= \
@@ -14,11 +14,20 @@ LDFLAGS+= --entry KernelMain -z norelro --image-base=0x100000 --static
 .PHONY: all
 all: ${TARGET}
 
+
 ${TARGET}: ${OBJS}
 	ld.lld ${LDFLAGS} -o $@ $^
 
 %.o: %.cpp
 	clang++ ${CPPFLAGS} ${CXXFLAGS} -c $<
+
+
+hankaku.bin: hankaku.txt
+	../../tools/makefont.py -o $@ $<
+
+hankaku.o: hankaku.bin
+	objcopy -I binary -O elf64-x86-64 -B i386:x86-64 $< $@
+
 
 .PHONY: clean
 clean:

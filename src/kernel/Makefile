@@ -4,7 +4,8 @@ OBJS= \
 	graphics.o \
 	font.o \
 	hankaku.o \
-	newlib_support.o
+	newlib_support.o \
+	console.o
 
 CPPFLAGS+=-I../Include
 
@@ -45,4 +46,4 @@ hankaku.o: hankaku.bin
 
 .PHONY: clean
 clean:
-	rm -rf *.o *.elf
+	rm -rf *.o *.elf *.bin

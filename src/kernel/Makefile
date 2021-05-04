@@ -30,6 +30,11 @@ all: ${TARGET}
 ${TARGET}: ${OBJS}
 	ld.lld ${LDFLAGS} -o $@ $^ -lc
 
+
+kernel.lst: main.cpp
+	clang++ ${CPPFLAGS} ${CXXFLAGS} -S -o kernel.lst main.cpp
+	
+
 %.o: %.cpp
 	clang++ ${CPPFLAGS} ${CXXFLAGS} -c $<
 

@@ -5,7 +5,9 @@ OBJS= \
 	font.o \
 	hankaku.o \
 	newlib_support.o \
-	console.o
+	console.o \
+	pci.o \
+	asmfunc.o
 
 CPPFLAGS+=-I../Include
 
@@ -40,6 +42,9 @@ kernel.lst: main.cpp
 
 %.o: %.c
 	clang ${CPPFLAGS} ${CFLAGS} -c $<
+
+%.o: %.asm
+	nasm -f elf64 -o $@ $<
 
 
 hankaku.bin: hankaku.txt

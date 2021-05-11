@@ -17,5 +17,9 @@ run: Build/MikanLoaderX64/DEBUG_CLANG38/X64/Loader.efi src/kernel/kernel.elf
 
 .PHONY: clean
 clean:
+	make -C src/kernel clean
+
+.PHONY: cleanall
+cleanall:
 	build cleanall
 	make -C src/kernel clean

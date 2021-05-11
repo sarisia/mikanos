@@ -5,11 +5,27 @@ OBJS= \
 	font.o \
 	hankaku.o \
 	newlib_support.o \
+	libcxx_support.o \
 	console.o \
 	pci.o \
-	asmfunc.o
+	asmfunc.o \
+	logger.o \
+	mouse.o \
+	usb/memory.o \
+	usb/device.o \
+	usb/classdriver/base.o \
+	usb/classdriver/hid.o \
+	usb/classdriver/keyboard.o \
+	usb/classdriver/mouse.o \
+	usb/xhci/ring.o \
+	usb/xhci/trb.o \
+	usb/xhci/xhci.o \
+	usb/xhci/port.o \
+	usb/xhci/device.o \
+	usb/xhci/devmgr.o \
+	usb/xhci/registers.o
 
-CPPFLAGS+=-I../Include
+CPPFLAGS+=-I../Include -I.
 
 CFLAGS+= \
 	-O2 -Wall -g --target=x86_64-elf \
@@ -30,7 +46,7 @@ all: ${TARGET}
 
 
 ${TARGET}: ${OBJS}
-	ld.lld ${LDFLAGS} -o $@ $^ -lc
+	ld.lld ${LDFLAGS} -o $@ $^ -lc -lc++
 
 
 kernel.lst: main.cpp
@@ -38,10 +54,10 @@ kernel.lst: main.cpp
 	
 
 %.o: %.cpp
-	clang++ ${CPPFLAGS} ${CXXFLAGS} -c $<
+	clang++ ${CPPFLAGS} ${CXXFLAGS} -o $@ -c $<
 
 %.o: %.c
-	clang ${CPPFLAGS} ${CFLAGS} -c $<
+	clang ${CPPFLAGS} ${CFLAGS} -o $@ -c $<
 
 %.o: %.asm
 	nasm -f elf64 -o $@ $<

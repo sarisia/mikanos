@@ -7,35 +7,15 @@
 #include "font.hpp"
 #include "console.hpp"
 #include "pci.hpp"
+#include "logger.hpp"
+#include "mouse.hpp"
 
-const int kMouseCursorWidth = 15;
-const int kMouseCursorHeight = 24;
-const char mouse_cursor_shape[kMouseCursorHeight][kMouseCursorWidth+1] = {
-    "@              ",
-    "@@             ",
-    "@.@            ",
-    "@..@           ",
-    "@...@          ",
-    "@....@         ",
-    "@.....@        ",
-    "@......@       ",
-    "@.......@      ",
-    "@........@     ",
-    "@.........@    ",
-    "@..........@   ",
-    "@...........@  ",
-    "@............@ ",
-    "@......@@@@@@@@",
-    "@......@       ",
-    "@....@@.@      ",
-    "@...@ @.@      ",
-    "@..@   @.@     ",
-    "@.@    @.@     ",
-    "@@      @.@    ",
-    "@       @.@    ",
-    "         @.@   ",
-    "         @@@   "
-};
+#include "usb/device.hpp"
+#include "usb/memory.hpp"
+#include "usb/classdriver/mouse.hpp"
+#include "usb/xhci/xhci.hpp"
+#include "usb/xhci/trb.hpp"
+
 
 // memory allocator
 
@@ -52,6 +32,13 @@ PixelWriter* pixel_writer;
 char console_buf[sizeof(Console)];
 Console* console;
 
+char mouse_cursor_buf[sizeof(MouseCursor)];
+MouseCursor* mouse_cursor;
+
+void MouseObserver(int8_t displacement_x, int8_t displacement_y) {
+    mouse_cursor->MoveRelative({displacement_x, displacement_y});
+}
+
 int printk(const char* format, ...) {
     va_list ap;
     int result;
@@ -63,6 +50,28 @@ int printk(const char* format, ...) {
 
     console->PutString(s);
     return result;
+}
+
+void SwitchEhci2Xhci(const pci::Device& xhc_dev) {
+    bool intel_ehc_exist = false;
+    for (int i = 0; i < pci::num_device; ++i) {
+        if (pci::devices[i].class_code.Match(0x0cu, 0x03u, 0x20u) // EHCI
+            && pci::ReadVendorID(pci::devices[i]) == 0x8086u) { // Intel
+            intel_ehc_exist = true;
+            break;   
+        }
+    }
+
+    if (!intel_ehc_exist) {
+        return;
+    }
+
+    uint32_t superspeed_ports = pci::ReadConfReg(xhc_dev, 0xdcu); // USB3PRM, PCI Device dependent region
+    pci::WriteConfigReg(xhc_dev, 0xd8u, superspeed_ports); // USB3_PSSEN
+    uint32_t ehci2xhci_ports = pci::ReadConfReg(xhc_dev, 0xd4u); // XUSB2PRM
+    pci::WriteConfigReg(xhc_dev, 0xd0u, ehci2xhci_ports); //XUSB2PR
+
+    Log(kDebug, "SwitchEhci2Xhci: SS=%02x, xHCI=%02x\n", superspeed_ports, ehci2xhci_ports);
 }
 
 extern "C"
@@ -95,32 +104,95 @@ void KernelMain(
     console = new(console_buf) Console{*pixel_writer, kDesktopFGColor, kDesktopBGColor};
     
     printk("Welcome to MikanOS!\n");
+    SetLogLevel(kWarn);
 
-    // draw mouse cursor
-    for (int dy = 0; dy < kMouseCursorHeight; ++dy) {
-        for (int dx = 0; dx < kMouseCursorWidth; ++dx) {
-            if (mouse_cursor_shape[dy][dx] == '@') {
-                pixel_writer->Write(200+dx, 100+dy, {0, 0, 0});
-            } else if (mouse_cursor_shape[dy][dx] == '.') {
-                pixel_writer->Write(200+dx, 100+dy, {255, 255, 255});
-            }
-        }
-    }
+    // initialize mouse
+    mouse_cursor = new(mouse_cursor_buf) MouseCursor{
+        pixel_writer, kDesktopBGColor, {300, 200}
+    };
 
+    // find all PCI devices
     auto err = pci::ScanAllBus();
-    printk("ScanAllBus: %s\n", err.Name());
+    Log(kDebug, "ScanAllBus: %s\n", err.Name());
 
-    printk("PCI Devices:\n");
-    // print all devices
+    // print all devices found
+    Log(kDebug, "PCI Devices:\n");
     for (int i = 0; i < pci::num_device; ++i) {
         const auto& dev = pci::devices[i];
         auto vendor_id = pci::ReadVendorID(dev.bus, dev.device, dev.function);
         auto class_code = pci::ReadClassCode(dev.bus, dev.device, dev.function);
-        printk("%d.%d.%d: vendor %04x, class %08x, head %02x\n",
+        Log(kDebug, "%d.%d.%d: vendor %04x, class %08x, head %02x\n",
             dev.bus, dev.device, dev.function,
             vendor_id, class_code, dev.header_type);
     }
 
+    // find xHC device
+    pci::Device* xhc_dev = nullptr;
+    for (int i = 0; i < pci::num_device; ++i) {
+        // base 0x0c: serial bus
+        // sub 0x03: USB controller
+        // if 0x30: xHCI
+        if (pci::devices[i].class_code.Match(0x0cu, 0x03u, 0x30u)) {
+            xhc_dev = &pci::devices[i];
+
+            // prefer Intel one (vendor 0x8086)
+            if (pci::ReadVendorID(*xhc_dev) == 0x8086u) {
+                break;
+            }
+        }
+
+        if (xhc_dev) {
+            Log(kInfo, "found xHC: %d.%d.%d\n", xhc_dev->bus, xhc_dev->device, xhc_dev->function);
+        }
+    }
+
+    const WithError<uint64_t> xhc_bar = pci::ReadBar(*xhc_dev, 0);
+    Log(kDebug, "ReadBar: %s\n", xhc_bar.error.Name());
+    const uint64_t xhc_mmio_base = xhc_bar.value & ~static_cast<uint64_t>(0xf);
+    Log(kDebug, "xHC mmio_base: %08lx\n", xhc_mmio_base);
+
+    // initialize xHC
+    usb::xhci::Controller xhc{xhc_mmio_base};
+    
+    // workaround for Intel Panther Point
+    if (pci::ReadVendorID(*xhc_dev) == 0x8086u) {
+        SwitchEhci2Xhci(*xhc_dev);
+    }
+
+    if (auto err = xhc.Initialize()) {
+        Log(kDebug, "xhc.Initialize: %s\n", err.Name());
+    }
+
+    Log(kInfo, "Starting xHC\n");
+    xhc.Run();
+
+    // register USB event handler
+    usb::HIDMouseDriver::default_observer = MouseObserver;
+    
+    for (int i = 1; i <= xhc.MaxPorts(); ++i) {
+        auto port = xhc.PortAt(i);
+        Log(kDebug, "Port %d: IsConnected=%d\n", i, port.IsConnected());
+
+        if (port.IsConnected()) {
+            if (auto err = ConfigurePort(xhc, port)) {
+                Log(kError, "Failed to configure port (%s) at %s:%d\n", err.Name(), err.File(), err.Line());
+                continue;
+            }
+        }
+    }
+
+    while (1) {
+        if (auto err = ProcessEvent(xhc)) {
+            Log(kError, "Error while processing xHC event (%s) at %s:%d\n", err.Name(), err.File(), err.Line());
+        }
+    }
+
+    while (1) {
+        __asm__("hlt");
+    }
+}
+
+extern "C" void __cxa_pure_virtual() {
     while (1) {
         __asm__("hlt");
     }

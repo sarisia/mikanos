@@ -10,7 +10,7 @@ struct Vector2D {
     Vector2D<T>& operator +=(const Vector2D<U>& rhs) {
         x += rhs.x;
         y += rhs.y;
-        return this;
+        return *this;
     }
 };
 

@@ -20,35 +20,33 @@ uint32_t makeAddress(uint8_t bus, uint8_t device,
 
 Error scanBus(uint8_t bus);
 
-Error addDevice(uint8_t bus, uint8_t device, uint8_t func, uint8_t header_type) {
+Error addDevice(const Device& device) {
     if (devices.size() == num_device) {
-        return Error::kFull;
+        return MAKE_ERROR(Error::kFull);
     }
 
-    devices[num_device++] = Device{bus, device, func, header_type};
-    return Error::kSuccess;
+    devices[num_device++] = device;
+    return MAKE_ERROR(Error::kSuccess);
 }
 
 Error scanFunction(uint8_t bus, uint8_t device, uint8_t func) {
     // add device (function) to pci::devices
     auto header_type = ReadHeaderType(bus, device, func);
-    if (auto err = addDevice(bus, device, func, header_type)) {
+    auto class_code = ReadClassCode(bus, device, func);
+    Device dev{bus, device, func, header_type, class_code};
+    if (auto err = addDevice(dev)) {
         return err;
     }
 
     // check PCI-to-PCI bridge
-    auto class_code = ReadClassCode(bus, device, func);
-    uint8_t base = (class_code >> 24) & 0xffu;
-    uint8_t sub = (class_code >> 16) & 0xffu;
-
     // base 0x06, sub 0x04 -> PCI-to-PCI bridge
-    if (base == 0x06u && sub == 0x04u) {
+    if (class_code.Match(0x06u, 0x04u)) {
         auto bus_number = ReadBusNumbers(bus, device, func);
         uint8_t secondary_bus = (bus_number >> 8) & 0xffu;
         return scanBus(secondary_bus);
     }
 
-    return Error::kSuccess;
+    return MAKE_ERROR(Error::kSuccess);
 }
 
 Error scanDevice(uint8_t bus, uint8_t device) {
@@ -58,7 +56,7 @@ Error scanDevice(uint8_t bus, uint8_t device) {
     }
 
     if (IsSingleFunctionDevice(ReadHeaderType(bus, device, 0))) {
-        return Error::kSuccess;
+        return MAKE_ERROR(Error::kSuccess);
     }
 
     // every device can have up to 8 functions
@@ -72,7 +70,7 @@ Error scanDevice(uint8_t bus, uint8_t device) {
         }
     }
 
-    return Error::kSuccess;
+    return MAKE_ERROR(Error::kSuccess);
 }
 
 Error scanBus(uint8_t bus) {
@@ -88,7 +86,7 @@ Error scanBus(uint8_t bus) {
         }
     }
 
-    return Error::kSuccess;
+    return MAKE_ERROR(Error::kSuccess);
 }
 
 }
@@ -123,15 +121,59 @@ uint16_t ReadVendorID(uint8_t bus, uint8_t device, uint8_t func) {
     return ReadData() & 0xffffu;
 }
 
-uint32_t ReadClassCode(uint8_t bus, uint8_t device, uint8_t func) {
+Classcode ReadClassCode(uint8_t bus, uint8_t device, uint8_t func) {
     WriteAddress(makeAddress(bus, device, func, 0x08u));
-    return ReadData();
+    auto reg = ReadData();
+    Classcode cc;
+    cc.base = (reg >> 24) & 0xffu;
+    cc.sub =  (reg >> 16) & 0xffu;
+    cc.interface = (reg >> 8) & 0xffu;
+
+    return cc;
 }
 
 uint32_t ReadBusNumbers(uint8_t bus, uint8_t device, uint8_t func) {
     // Base Address Register 2?
     WriteAddress(makeAddress(bus, device, func, 0x18u));
     return ReadData();
+}
+
+WithError<uint64_t> ReadBar(Device& device, unsigned int bar_index) {
+    // BAR0 - BAR5
+    if (bar_index >= 6) {
+        return {0, MAKE_ERROR(Error::kIndexOutOfRange)};
+    }
+
+    const auto addr = CalcBarAddress(bar_index);
+    const auto bar = ReadConfReg(device, addr);
+
+    // read flag, determine addr length
+    // 32bit addr
+    if ((bar & 0b0100u) == 0) {
+        return {bar, MAKE_ERROR(Error::kSuccess)};
+    }
+
+    // 64bit addr
+    if (bar_index >= 5) {
+        return {0, MAKE_ERROR(Error::kIndexOutOfRange)};
+    }
+
+    // concat
+    const auto bar_upper = ReadConfReg(device, addr + 4); // content in bar_index+1
+    return {
+        bar | (static_cast<uint64_t>(bar_upper) << 32),
+        MAKE_ERROR(Error::kSuccess)
+    };
+}
+
+uint32_t ReadConfReg(const Device& device, uint8_t reg_addr) {
+    WriteAddress(makeAddress(device.bus, device.device, device.function, reg_addr));
+    return ReadData();
+}
+
+void WriteConfigReg(const Device& device, uint8_t reg_addr, uint32_t value) {
+    WriteAddress(makeAddress(device.bus, device.device, device.function, reg_addr));
+    WriteData(value);
 }
 
 bool IsSingleFunctionDevice(uint8_t header_type) {
@@ -162,7 +204,7 @@ Error ScanAllBus() {
         }
     }
 
-    return Error::kSuccess;
+    return MAKE_ERROR(Error::kSuccess);
 }
 
 }

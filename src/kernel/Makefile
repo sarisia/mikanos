@@ -11,6 +11,7 @@ OBJS= \
 	asmfunc.o \
 	logger.o \
 	mouse.o \
+	interrupt.o \
 	usb/memory.o \
 	usb/device.o \
 	usb/classdriver/base.o \

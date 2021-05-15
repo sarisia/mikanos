@@ -10,15 +10,8 @@
 
 #include "frame_buffer_config.hpp"
 #include "elf.hpp"
+#include "memory_map.hpp"
 
-struct MemoryMap {
-    UINTN buffer_size;
-    VOID *buffer;
-    UINTN map_size;
-    UINTN map_key;
-    UINTN descriptor_size;
-    UINT32 descriptor_version;
-};
 
 #define CASE_STRING(memtype) case memtype: return L"" #memtype
 
@@ -412,9 +405,11 @@ EFI_STATUS EFIAPI UefiMain(
     }
 
     // start kernel
-    typedef void (*EntryPointType)(const struct FrameBufferConfig *);
+    typedef void (*EntryPointType)(
+        const struct FrameBufferConfig*,
+        const struct MemoryMap*);
     EntryPointType entry_point = (EntryPointType)entry_addr;
-    (*entry_point)(&config);
+    (*entry_point)(&config, &memmap);
 
     Print(L"All done...?\n");
     return EFI_SUCCESS;

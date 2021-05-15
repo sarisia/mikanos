@@ -3,6 +3,7 @@
 #include <cstdio>
 
 #include "frame_buffer_config.hpp"
+#include "memory_map.hpp"
 #include "graphics.hpp"
 #include "font.hpp"
 #include "console.hpp"
@@ -95,7 +96,8 @@ void IntHandlerXHCI(InterruptFrame* frame) {
 
 extern "C"
 void KernelMain(
-    const struct FrameBufferConfig& frame_buffer_config
+    const struct FrameBufferConfig& frame_buffer_config,
+    const struct MemoryMap& memory_map
 ) {
     switch (frame_buffer_config.pixel_format) {
     case kPixelRGBResv8BitPerColor:
@@ -123,6 +125,29 @@ void KernelMain(
     console = new(console_buf) Console{*pixel_writer, kDesktopFGColor, kDesktopBGColor};
     
     printk("Welcome to MikanOS!\n");
+    SetLogLevel(kDebug);
+
+    // dump memory map
+    const std::array<MemoryType, 3> available_memory_types{
+        MemoryType::kEfiBootServicesCode,
+        MemoryType::kEfiBootServicesData,
+        MemoryType::kEfiConventionalMemory,
+    };
+
+    Log(kDebug, "memory_map: %p\n", &memory_map);
+    for (uintptr_t iter = reinterpret_cast<uintptr_t>(memory_map.buffer);
+         iter < reinterpret_cast<uintptr_t>(memory_map.buffer)+memory_map.map_size;
+         iter += memory_map.descriptor_size) {
+        auto desc = reinterpret_cast<MemoryDescriptor*>(iter);
+        for (int i = 0 ; i < available_memory_types.size(); ++i) {
+            if (desc->type == available_memory_types[i]) {
+                Log(kDebug, "type = %u, phys = %08lx - %08lx, pages = %lu, attr = %08lx\n",
+                    desc->type, desc->physical_start, desc->physical_start+desc->number_of_pages*4096 - 1,
+                    desc->number_of_pages, desc->attribute);
+            }
+        }
+    }
+
     SetLogLevel(kWarn);
 
     // initialize mouse

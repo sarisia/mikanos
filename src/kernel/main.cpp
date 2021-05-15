@@ -11,6 +11,7 @@
 #include "mouse.hpp"
 #include "interrupt.hpp"
 #include "asmfunc.h"
+#include "queue.hpp"
 
 #include "usb/device.hpp"
 #include "usb/memory.hpp"
@@ -78,14 +79,17 @@ void SwitchEhci2Xhci(const pci::Device& xhc_dev) {
 
 usb::xhci::Controller* xhc;
 
+struct Message {
+    enum Type {
+        kInterruptXHCI,
+    } type;
+};
+
+ArrayQueue<Message>* main_queue;
+
 __attribute__((interrupt))
 void IntHandlerXHCI(InterruptFrame* frame) {
-    while (xhc->PrimaryEventRing()->HasFront()) {
-        if (auto err = ProcessEvent(*xhc)) {
-            Log(kError, "Error while ProcessEvent (%s) at %s:%d\n", err.Name(), err.File(), err.Line());
-        }
-    }
-
+    main_queue->Push(Message{Message::kInterruptXHCI});
     NotifyEndOfInterrupt();
 }
 
@@ -125,6 +129,11 @@ void KernelMain(
     mouse_cursor = new(mouse_cursor_buf) MouseCursor{
         pixel_writer, kDesktopBGColor, {300, 200}
     };
+
+    // initialize event queue
+    std::array <Message,32> main_queue_data;
+    ArrayQueue<Message> main_queue{main_queue_data};
+    ::main_queue = &main_queue;
 
     // find all PCI devices
     auto err = pci::ScanAllBus();
@@ -200,8 +209,6 @@ void KernelMain(
     xhc.Run();
 
     ::xhc = &xhc;
-    // INTERRUPT HANDLER
-    __asm__("sti"); // Set interrupt flag
 
     // register USB event handler
     usb::HIDMouseDriver::default_observer = MouseObserver;
@@ -219,8 +226,32 @@ void KernelMain(
     }
 
 
-    while (1) {
-        __asm__("hlt");
+    while (true) {
+        __asm__("cli"); // Clear interrupt flag
+
+        if (main_queue.Count() == 0) {
+            // empty, enable interrupt and halt
+            __asm__("sti");
+            __asm__("hlt");
+            continue;
+        }
+
+        auto msg = main_queue.Front();
+        main_queue.Pop();
+        __asm__("sti");
+
+        switch (msg.type) {
+        case Message::kInterruptXHCI:
+            while (xhc.PrimaryEventRing()->HasFront()) {
+                if (auto err = ProcessEvent(xhc)) {
+                    Log(kError, "Error while ProcessEvent (%s) at %s:%d\n",
+                        err.Name(), err.File(), err.Line());
+                }
+            }
+            break;
+        default:
+            Log(kError, "Unknown interrupt message (%d)\n", msg.type);
+        }
     }
 }
 

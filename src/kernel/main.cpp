@@ -13,6 +13,8 @@
 #include "interrupt.hpp"
 #include "asmfunc.h"
 #include "queue.hpp"
+#include "segment.hpp"
+#include "paging.hpp"
 
 #include "usb/device.hpp"
 #include "usb/memory.hpp"
@@ -94,11 +96,16 @@ void IntHandlerXHCI(InterruptFrame* frame) {
     NotifyEndOfInterrupt();
 }
 
+alignas(16) uint8_t kernel_main_stack[1024*1024];
+
 extern "C"
-void KernelMain(
-    const struct FrameBufferConfig& frame_buffer_config,
-    const struct MemoryMap& memory_map
+void KernelMainNewStack(
+    const struct FrameBufferConfig& frame_buffer_config_ref,
+    const struct MemoryMap& memory_map_ref
 ) {
+    FrameBufferConfig frame_buffer_config{frame_buffer_config_ref};
+    MemoryMap memory_map{memory_map_ref};
+
     switch (frame_buffer_config.pixel_format) {
     case kPixelRGBResv8BitPerColor:
         pixel_writer = new(pixel_writer_buf) RGBResv8BitPerColorPixelWriter(frame_buffer_config);
@@ -127,24 +134,27 @@ void KernelMain(
     printk("Welcome to MikanOS!\n");
     SetLogLevel(kDebug);
 
-    // dump memory map
-    const std::array<MemoryType, 3> available_memory_types{
-        MemoryType::kEfiBootServicesCode,
-        MemoryType::kEfiBootServicesData,
-        MemoryType::kEfiConventionalMemory,
-    };
+    // setup segments
+    SetupSegments();
 
-    Log(kDebug, "memory_map: %p\n", &memory_map);
-    for (uintptr_t iter = reinterpret_cast<uintptr_t>(memory_map.buffer);
-         iter < reinterpret_cast<uintptr_t>(memory_map.buffer)+memory_map.map_size;
-         iter += memory_map.descriptor_size) {
-        auto desc = reinterpret_cast<MemoryDescriptor*>(iter);
-        for (int i = 0 ; i < available_memory_types.size(); ++i) {
-            if (desc->type == available_memory_types[i]) {
-                Log(kDebug, "type = %u, phys = %08lx - %08lx, pages = %lu, attr = %08lx\n",
-                    desc->type, desc->physical_start, desc->physical_start+desc->number_of_pages*4096 - 1,
-                    desc->number_of_pages, desc->attribute);
-            }
+    const uint16_t kernel_cs = 1 << 3;
+    const uint16_t kernel_ss = 2 << 3;
+    SetDSAll(0);
+    SetCSSS(kernel_cs, kernel_ss);
+
+    SetupIdentityPageTable();
+
+    // dump memory map
+    const auto memory_map_base = reinterpret_cast<uintptr_t>(memory_map.buffer);
+    for (uintptr_t iter = memory_map_base; iter < memory_map_base + memory_map.map_size; iter += memory_map.descriptor_size) {
+        auto desc = reinterpret_cast<MemoryDescriptor *>(iter);
+        if (IsAvailable(static_cast<MemoryType>(desc->type))) {
+            Log(kDebug, "type=%u, phys=%08lx - %08lx, pages = %lu, attr = %08lx\n",
+                desc->type,
+                desc->physical_start,
+                desc->physical_start+desc->number_of_pages*4096 - 1,
+                desc->number_of_pages,
+                desc->attribute);
         }
     }
 
@@ -197,9 +207,8 @@ void KernelMain(
 
 
     // register interrupt handler
-    const uint16_t cs = GetCS(); // code segment
     SetIDTEntry(idt[InterruptVector::kXHCI], MakeIDTAttr(DescriptorType::kInterruptGate, 0),
-                reinterpret_cast<uint64_t>(IntHandlerXHCI), cs);
+                reinterpret_cast<uint64_t>(IntHandlerXHCI), kernel_cs);
     LoadIDT(sizeof(idt)-1, reinterpret_cast<uintptr_t>(&idt[0]));
 
     const uint8_t bsp_local_apic_id = *reinterpret_cast<const uint32_t*>(0xfee00020) >> 24;

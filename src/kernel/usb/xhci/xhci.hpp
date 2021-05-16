@@ -6,6 +6,8 @@
 
 #pragma once
 
+#include <cstring>
+
 #include "error.hpp"
 #include "usb/xhci/registers.hpp"
 #include "usb/xhci/context.hpp"

@@ -3,22 +3,14 @@
 #include <cstdint>
 #include <array>
 
+#include "x86_descriptor.hpp"
+
 struct InterruptFrame {
     uint64_t rip;
     uint64_t cs;
     uint64_t rflags;
     uint64_t rsp;
     uint64_t ss;
-};
-
-enum class DescriptorType {
-    kUpper8Bytes = 0,
-    kLDT = 2,
-    kTSSAvailable = 9,
-    kTSSBusy = 11,
-    kCallGate = 12,
-    kInterruptGate = 14,
-    kTrapGate = 15,
 };
 
 union InterruptDescriptorAttribute {

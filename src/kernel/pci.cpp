@@ -265,7 +265,7 @@ Error ScanAllBus() {
     }
 
     // if not a SingleFuncDevice, search all functions
-    for (uint8_t func = 1; func < 8; ++func) {
+    for (uint8_t func = 0; func < 8; ++func) {
         if (ReadVendorID(0, 0, func) == 0xffffu) {
             // invalid vendor ID, not valid function
             continue;

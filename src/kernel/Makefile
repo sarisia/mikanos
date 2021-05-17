@@ -14,6 +14,7 @@ OBJS= \
 	interrupt.o \
 	segment.o \
 	paging.o \
+	memory_manager.o \
 	usb/memory.o \
 	usb/device.o \
 	usb/classdriver/base.o \

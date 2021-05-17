@@ -15,6 +15,7 @@
 #include "queue.hpp"
 #include "segment.hpp"
 #include "paging.hpp"
+#include "memory_manager.hpp"
 
 #include "usb/device.hpp"
 #include "usb/memory.hpp"
@@ -37,6 +38,9 @@ PixelWriter* pixel_writer;
 
 char console_buf[sizeof(Console)];
 Console* console;
+
+char memory_manager_buf[sizeof(BitmapMemoryManager)];
+BitmapMemoryManager *memory_manager;
 
 char mouse_cursor_buf[sizeof(MouseCursor)];
 MouseCursor* mouse_cursor;
@@ -144,19 +148,34 @@ void KernelMainNewStack(
 
     SetupIdentityPageTable();
 
-    // dump memory map
+    // initialize memory manager
+    ::memory_manager = new(memory_manager_buf) BitmapMemoryManager;
+
+    // mark in-used memory
     const auto memory_map_base = reinterpret_cast<uintptr_t>(memory_map.buffer);
+    uintptr_t available_end = 0; // 最後の未使用領域の末尾のアドレス
+
     for (uintptr_t iter = memory_map_base; iter < memory_map_base + memory_map.map_size; iter += memory_map.descriptor_size) {
-        auto desc = reinterpret_cast<MemoryDescriptor *>(iter);
+        auto desc = reinterpret_cast<const MemoryDescriptor *>(iter);
+        if (desc->physical_start > available_end) {
+            memory_manager->MarkAllocated(
+                FrameID{available_end / kBytesPerFrame},
+                (desc->physical_start - available_end) / kBytesPerFrame
+            );
+        }
+
+        const auto physical_end = desc->physical_start + desc->number_of_pages*kUEFIPageSize;
         if (IsAvailable(static_cast<MemoryType>(desc->type))) {
-            Log(kDebug, "type=%u, phys=%08lx - %08lx, pages = %lu, attr = %08lx\n",
-                desc->type,
-                desc->physical_start,
-                desc->physical_start+desc->number_of_pages*4096 - 1,
-                desc->number_of_pages,
-                desc->attribute);
+            available_end = physical_end;
+        } else {
+            memory_manager->MarkAllocated(
+                FrameID{desc->physical_start / kBytesPerFrame},
+                desc->number_of_pages * kUEFIPageSize / kBytesPerFrame
+            );
         }
     }
+
+    memory_manager->SetMemoryRange(FrameID{ 1 }, FrameID{ available_end / kBytesPerFrame });
 
     SetLogLevel(kWarn);
 

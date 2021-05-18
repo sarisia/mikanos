@@ -35,3 +35,16 @@ void DrawRectangle(PixelWriter& writer, const Vector2D<int>& pos,
         writer.Write(pos.x + size.x - 1, pos.y + dy, color);
     }
 }
+
+void DrawDesktop(PixelWriter &writer) {
+    const auto width = writer.Width();
+    const auto height = writer.Height();
+
+    // background
+    FillRectangle(writer, {0, 0}, {width, height-50}, kDesktopBGColor);
+    // taskbar
+    FillRectangle(writer, {0, height-50}, { width, 50 }, {212, 208, 200});
+    // selected app
+    FillRectangle(writer, {0, height-50}, {width/5, 50}, {80, 80, 80});
+    DrawRectangle(writer, {10, height-40}, {30, 30}, {160, 160, 160});
+}

@@ -65,3 +65,6 @@ private:
     bool getBit(FrameID frame) const;
     void setBit(FrameID frame, bool allocalted);
 };
+
+// allocates new heap, set up newlib_support:sbrk()
+Error InitializeHeap(BitmapMemoryManager &memory_manager);

@@ -15,6 +15,8 @@ OBJS= \
 	segment.o \
 	paging.o \
 	memory_manager.o \
+	window.o \
+	layer.o \
 	usb/memory.o \
 	usb/device.o \
 	usb/classdriver/base.o \
@@ -50,7 +52,7 @@ all: ${TARGET}
 
 
 ${TARGET}: ${OBJS}
-	ld.lld ${LDFLAGS} -o $@ $^ -lc -lc++
+	ld.lld ${LDFLAGS} -o $@ $^ -lc -lc++ -lc++abi
 
 
 kernel.lst: main.cpp

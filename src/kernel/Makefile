@@ -17,6 +17,7 @@ OBJS= \
 	memory_manager.o \
 	window.o \
 	layer.o \
+	timer.o \
 	usb/memory.o \
 	usb/device.o \
 	usb/classdriver/base.o \

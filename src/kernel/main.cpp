@@ -18,6 +18,7 @@
 #include "memory_manager.hpp"
 #include "window.hpp"
 #include "layer.hpp"
+#include "timer.hpp"
 
 #include "usb/device.hpp"
 #include "usb/memory.hpp"
@@ -26,11 +27,7 @@
 #include "usb/xhci/trb.hpp"
 
 
-// memory allocator
-
-// void* operator new(size_t size, void* buf) {
-//     return buf;
-// }
+int printk(const char* format, ...);
 
 void operator delete(void* obj) noexcept {}
 
@@ -53,7 +50,13 @@ unsigned int mouse_layer_id;
 void MouseObserver(int8_t displacement_x, int8_t displacement_y) {
     // mouse_cursor->MoveRelative({displacement_x, displacement_y});
     layer_manager->MoveRelative(mouse_layer_id, {displacement_x, displacement_y});
+
+    // profile with timer
+    StartLAPICTimer();
     layer_manager->Draw();
+    auto elapsed = LAPICTimerElapsed();
+    StopLAPICTimer();
+    printk("MouseObserver: elapsed %u\n", elapsed);
 }
 
 int printk(const char* format, ...) {
@@ -133,6 +136,9 @@ void KernelMainNewStack(
     
     printk("Welcome to MikanOS!\n");
     SetLogLevel(kDebug);
+
+    // initialize timer
+    InitializeLAPICTimer();
 
     // setup segments
     SetupSegments();

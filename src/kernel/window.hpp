@@ -4,6 +4,7 @@
 #include <optional>
 
 #include "graphics.hpp"
+#include "frame_buffer.hpp"
 
 class Window {    
 public:
@@ -14,10 +15,15 @@ public:
 
     public:
         WindowWriter(Window &window): window_{window} {}
+
         // Write draws pixel to the given position
-        void Write(int x, int y, const PixelColor &color) override {
-            window_.At(x, y) = color;
+        void Write(int x, int y, const PixelColor& color) override {
+            Write(Vector2D<int>{x, y}, color);
         }
+        void Write(Vector2D<int> pos, const PixelColor &color) override {
+            window_.Write(pos, color);
+        }
+
         // Width returns window's width, in pixel manner
         int Width() const override {
             return window_.Width();
@@ -29,7 +35,7 @@ public:
         }
     };
 
-    Window(int width, int height);
+    Window(int width, int height, PixelFormat shadow_format);
     ~Window() = default;
 
     // prohibit copy
@@ -37,13 +43,14 @@ public:
     Window &operator =(const Window& rhs) = delete;
 
     // DrawTo draws this window to the given PixelWriter
-    void DrawTo(PixelWriter &writer, Vector2D<int> position);
+    void DrawTo(FrameBuffer &dst, Vector2D<int> position);
     // SetTransparentColor sets transparent color
     void SetTransparentColor(std::optional<PixelColor> c);
 
     WindowWriter *Writer();
-    PixelColor &At(int x, int y);
     const PixelColor &At(int x, int y) const;
+    const PixelColor &At(Vector2D<int> pos) const;
+    void Write(Vector2D<int> pos, PixelColor color);
 
     int Width() const;
     int Height() const;
@@ -54,4 +61,5 @@ private:
     std::vector<std::vector<PixelColor>> data_{};
     WindowWriter writer_{ *this };
     std::optional<PixelColor> transparent_color_{std::nullopt};
+    FrameBuffer shadow_buffer_{};
 };

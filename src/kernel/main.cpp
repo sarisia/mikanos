@@ -287,19 +287,26 @@ void KernelMainNewStack(
     const int kFrameWidth = frame_buffer_config.horizontal_resolution;
     const int kFrameHeight = frame_buffer_config.vertical_resolution;
 
-    auto bg_window = std::make_shared<Window>(kFrameWidth, kFrameHeight);
+    auto bg_window = std::make_shared<Window>(kFrameWidth, kFrameHeight, frame_buffer_config.pixel_format);
     auto bg_writer = bg_window->Writer();
 
     DrawDesktop(*bg_writer);
     // change console from direct draw to window-managed
     console->SetWriter(bg_writer);
 
-    auto mouse_window = std::make_shared<Window>(kMouseCursorWidth, kMouseCursorHeight);
+    auto mouse_window = std::make_shared<Window>(kMouseCursorWidth, kMouseCursorHeight, frame_buffer_config.pixel_format);
     mouse_window->SetTransparentColor(kMouseTransparentColor);
     DrawMouseCursor(mouse_window->Writer(), {0, 0});
 
+    // real screen
+    FrameBuffer screen;
+    if (auto err = screen.Initialize(frame_buffer_config)) {
+        Log(kError, "Failed to initialize frame buffer (%s) at %s:%d\n",
+            err.Name(), err.File(), err.Line());
+    }
+
     layer_manager = new LayerManager();
-    layer_manager->SetWriter(pixel_writer);
+    layer_manager->SetWriter(&screen);
 
     auto bglayer_id = layer_manager->NewLayer()
         .SetWindow(bg_window)

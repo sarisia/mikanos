@@ -28,12 +28,12 @@ public:
     Layer &Move(Vector2D<int> pos);
     Layer &MoveRelative(Vector2D<int> pos_diff);
     // DrawTo draws the current window to the given writer
-    void DrawTo(PixelWriter &writer) const;
+    void DrawTo(FrameBuffer &screen) const;
 };
 
 class LayerManager {
 private:
-    PixelWriter *writer_{nullptr};
+    FrameBuffer *screen_{nullptr};
     std::vector<std::unique_ptr<Layer>> layers_{};
     // start is most back, end is most top
     std::vector<Layer *> layer_stack_{};
@@ -43,7 +43,7 @@ private:
     Layer *findLayer(unsigned int id);
 
 public:
-    void SetWriter(PixelWriter *writer);
+    void SetWriter(FrameBuffer *screen);
     // Create new Layer. The new Layer will be maintained in the LayerManager
     Layer &NewLayer();
     void Draw() const;

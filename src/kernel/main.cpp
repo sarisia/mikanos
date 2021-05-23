@@ -68,7 +68,18 @@ int printk(const char* format, ...) {
     result = vsprintf(s, format, ap);
     va_end(ap);
 
+    // profile console output
+    StartLAPICTimer();
+
     console->PutString(s);
+
+    auto elapsed = LAPICTimerElapsed();
+    StopLAPICTimer();
+
+    // overwrite with timestamp added string
+    sprintf(s, "[%09d] ", elapsed);
+    console->PutString(s);
+    
     return result;
 }
 

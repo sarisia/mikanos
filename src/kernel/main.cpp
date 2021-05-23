@@ -79,7 +79,7 @@ int printk(const char* format, ...) {
     // overwrite with timestamp added string
     sprintf(s, "[%09d] ", elapsed);
     console->PutString(s);
-    
+
     return result;
 }
 
@@ -303,7 +303,7 @@ void KernelMainNewStack(
 
     DrawDesktop(*bg_writer);
     // change console from direct draw to window-managed
-    console->SetWriter(bg_writer);
+    console->SetWindow(bg_window);
 
     auto mouse_window = std::make_shared<Window>(kMouseCursorWidth, kMouseCursorHeight, frame_buffer_config.pixel_format);
     mouse_window->SetTransparentColor(kMouseTransparentColor);

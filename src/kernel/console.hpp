@@ -13,9 +13,11 @@ public:
     
     void PutString(const char* s);
     void SetWriter(PixelWriter *writer);
+    void SetWindow(const std::shared_ptr<Window> &window);
 
 private:
     PixelWriter* writer_;
+    std::shared_ptr<Window> window_;
     const PixelColor fg_color_, bg_color_;
     char buffer_[kRows][kColumns+1];
     int cur_row_, cur_column_;

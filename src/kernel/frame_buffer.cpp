@@ -2,9 +2,44 @@
 
 #include "frame_buffer.hpp"
 
+
+namespace {
+    int bitsPerPixel(PixelFormat format) {
+        switch (format) {
+        case kPixelRGBResv8BitPerColor:
+            return 32;
+        case kPixelBGRResv8BitPerColor:
+            return 32;
+        }
+
+        return -1;
+    }
+
+    int bytesPerPixel(PixelFormat format) {
+        switch (format) {
+        case kPixelRGBResv8BitPerColor:
+            return 4;
+        case kPixelBGRResv8BitPerColor:
+            return 4;
+        }
+
+        return -1;
+    }
+
+    int bytesPerScanLine(const FrameBufferConfig &config) {
+        return bytesPerPixel(config.pixel_format) * config.pixels_per_scan_line;
+    }
+
+    uint8_t *frameAddrAt(Vector2D<int> pos, const FrameBufferConfig &config) {
+        return config.frame_buffer + bytesPerPixel(config.pixel_format) *
+            (pos.x + config.pixels_per_scan_line * pos.y);
+    }
+}
+
+
 Error FrameBuffer::Initialize(const FrameBufferConfig &config) {
     config_ = config;
-    const auto bits_per_pixel = BitsPerPixel(config_.pixel_format);
+    const auto bits_per_pixel = bitsPerPixel(config_.pixel_format);
     if (bits_per_pixel <= 0) {
         return MAKE_ERROR(Error::kUnknownPixelFormat);
     }
@@ -39,7 +74,7 @@ Error FrameBuffer::Copy(Vector2D<int> pos, const FrameBuffer &src) {
         return MAKE_ERROR(Error::kUnknownPixelFormat);
     }
 
-    const auto bits_per_pixel = BitsPerPixel(config_.pixel_format);
+    const auto bits_per_pixel = bitsPerPixel(config_.pixel_format);
     if (bits_per_pixel <= 0) {
         return MAKE_ERROR(Error::kUnknownPixelFormat);
     }
@@ -70,14 +105,28 @@ Error FrameBuffer::Copy(Vector2D<int> pos, const FrameBuffer &src) {
     return MAKE_ERROR(Error::kSuccess);
 }
 
+void FrameBuffer::Move(Vector2D<int> dst_pos, const Rectangle<int> &src) {
+    const auto bytes_per_pixel = bytesPerPixel(config_.pixel_format);
+    const auto bytes_per_scan_line = bytesPerScanLine(config_);
 
-int BitsPerPixel(PixelFormat format) {
-    switch (format) {
-    case kPixelRGBResv8BitPerColor:
-        return 32;
-    case kPixelBGRResv8BitPerColor:
-        return 32;
+    if (dst_pos.y < src.pos.y) { // move up
+        uint8_t *dst_buf = frameAddrAt(dst_pos, config_);
+        const uint8_t *src_buf = frameAddrAt(src.pos, config_);
+
+        for (int y = 0; y < src.size.y; ++y) {
+            memcpy(dst_buf, src_buf, bytes_per_pixel * src.size.x);
+            dst_buf += bytes_per_scan_line;
+            src_buf += bytes_per_scan_line;
+        }
+    } else { // move down
+        // do from tail
+        uint8_t *dst_buf = frameAddrAt(dst_pos + Vector2D<int>{0, src.size.y-1}, config_);
+        const uint8_t *src_buf = frameAddrAt(src.pos + Vector2D<int>{0, src.size.y-1}, config_);
+
+        for (int y = 0; y < src.size.y; ++y) {
+            memcpy(dst_buf, src_buf, bytes_per_pixel * src.size.x);
+            dst_buf -= bytes_per_scan_line;
+            src_buf -= bytes_per_scan_line;
+        }
     }
-
-    return -1;
 }

@@ -4,7 +4,7 @@
 #include "font.hpp"
 
 Console::Console(const PixelColor& fg_color, const PixelColor& bg_color)
-    : writer_(nullptr), fg_color_(fg_color), bg_color_(bg_color),
+    : writer_(nullptr), window_{}, fg_color_(fg_color), bg_color_(bg_color),
       buffer_(), cur_row_(0), cur_column_(0) {
 }
 
@@ -37,18 +37,32 @@ void Console::SetWriter(PixelWriter *writer) {
     refresh();
 }
 
+void Console::SetWindow(const std::shared_ptr<Window> &window) {
+    if (window == window_) {
+        return;
+    }
+
+    window_ = window;
+    writer_ = window->Writer();
+    refresh();
+}
+
 void Console::newLine() {
     cur_column_ = 0;
     if (cur_row_ < kRows-1) {
         ++cur_row_;
+        return;
+    } 
+    
+    if (window_) {
+        // move all pixels to 1 lines above
+        Rectangle<int> move_src{{0, 16}, {8*kColumns, 16*(kRows-1)}};
+        window_->Move({0, 0}, move_src);
+        // fill final line
+        FillRectangle(*writer_, {0, 16*(kRows-1)}, {8*kColumns, 16}, bg_color_);
     } else {
-        // console is full
-        // clear
-        for (int y = 0; y < 16*kRows; ++y) {
-            for (int x = 0; x < 8*kColumns; ++x) {
-                writer_->Write(x, y, bg_color_);
-            }
-        }
+        // clear all
+        FillRectangle(*writer_, {0, 0}, {8*kColumns, 16*kRows}, bg_color_);
 
         // move buffers
         for (int row = 1; row < kRows; ++row) {

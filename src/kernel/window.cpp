@@ -61,6 +61,10 @@ void Window::Write(Vector2D<int> pos, PixelColor color) {
     shadow_buffer_.Writer().Write(pos, color);
 }
 
+void Window::Move(Vector2D<int> dst_pos, const Rectangle<int> &src) {
+    shadow_buffer_.Move(dst_pos, src);
+}
+
 int Window::Width() const {
     return width_;
 }

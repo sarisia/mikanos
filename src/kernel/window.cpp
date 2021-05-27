@@ -30,8 +30,11 @@ void Window::DrawTo(FrameBuffer &dst, Vector2D<int> position) {
     // transparent
     const auto tc = transparent_color_.value();
     auto &writer = dst.Writer();
-    for (int y = 0; y < Height(); ++y) {
-        for (int x = 0; x < Width(); ++x) {
+
+    // マウス移動を相対で行うので position がマイナスに突っ込んでいることがある？
+    // そのまま書き込むと左右反対側からカーソルが出てくる (範囲外メモリかな？わからん)
+    for (int y = std::max(0, 0-position.y); y < std::min(Height(), writer.Height()-position.y); ++y) {
+        for (int x = std::max(0, 0-position.x); x < std::min(Width(), writer.Width()-position.x); ++x) {
             const auto c = At(x, y);
             if (c != tc) {
                 writer.Write(position.x+x, position.y+y, c);

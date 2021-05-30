@@ -75,6 +75,28 @@ void Window::DrawTo(FrameBuffer &dst, Vector2D<int> position) {
     }
 }
 
+void Window::DrawTo(FrameBuffer &dst, Vector2D<int> pos, const Rectangle<int> &area) {
+    if (!transparent_color_) {
+        Rectangle<int> window_area{pos, this->Size()};
+        Rectangle<int> intersection = area & window_area; // 重複領域
+        dst.Copy(intersection.pos, shadow_buffer_, {intersection.pos-pos, intersection.size});
+        return;
+    }
+
+    // transparent
+    const auto tc = transparent_color_.value();
+    auto& writer = dst.Writer();
+
+    for (int y = std::max(0, 0 - pos.y); y < std::min(Height(), writer.Height() - pos.y); ++y) {
+        for (int x = std::max(0, 0 - pos.x); x < std::min(Width(), writer.Width() - pos.x); ++x) {
+            const auto c = At(x, y);
+            if (c != tc) {
+                writer.Write(pos.x + x, pos.y + y, c);
+            }
+        }
+    }
+}
+
 void Window::SetTransparentColor(std::optional<PixelColor> c) {
     transparent_color_ = c;
 }
@@ -106,6 +128,10 @@ int Window::Width() const {
 
 int Window::Height() const {
     return height_;
+}
+
+Vector2D<int> Window::Size() const {
+    return {width_, height_};
 }
 
 

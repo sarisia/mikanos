@@ -301,8 +301,10 @@ void KernelMainNewStack(
     auto bg_writer = bg_window->Writer();
 
     DrawDesktop(*bg_writer);
-    // change console from direct draw to window-managed
-    console->SetWindow(bg_window);
+
+    // console
+    auto console_window = std::make_shared<Window>(Console::kColumns*8, Console::kRows*16, frame_buffer_config.pixel_format);
+    console->SetWindow(console_window);
 
     auto mouse_window = std::make_shared<Window>(kMouseCursorWidth, kMouseCursorHeight, frame_buffer_config.pixel_format);
     mouse_window->SetTransparentColor(kMouseTransparentColor);
@@ -336,11 +338,16 @@ void KernelMainNewStack(
         .SetWindow(main_window)
         .Move({300, 100})
         .ID();
+    console->SetLayerID(layer_manager->NewLayer()
+        .SetWindow(console_window)
+        .Move({0, 0})
+        .ID());
 
     layer_manager->UpDown(bglayer_id, 0);
-    layer_manager->UpDown(mouse_layer_id, 1);
-    layer_manager->UpDown(main_window_layer_id, 1);
-    layer_manager->Draw();
+    layer_manager->UpDown(console->LayerID(), 1);
+    layer_manager->UpDown(main_window_layer_id, 2);
+    layer_manager->UpDown(mouse_layer_id, 3);
+    layer_manager->Draw(); // draw all
 
     // counter
     char str[128];
@@ -352,7 +359,7 @@ void KernelMainNewStack(
         sprintf(str, "%010u", count);
         FillRectangle(*main_window->Writer(), {24, 28}, {8*10, 16}, {0xc6, 0xc6, 0xc6});
         WriteString(*main_window->Writer(), {24, 28}, str, {0, 0, 0});
-        layer_manager->Draw();
+        layer_manager->Draw(main_window_layer_id); // only refresh main window
 
 
         __asm__("cli"); // Clear interrupt flag

@@ -44,6 +44,7 @@ public:
 
     // DrawTo draws this window to the given PixelWriter
     void DrawTo(FrameBuffer &dst, Vector2D<int> position);
+    void DrawTo(FrameBuffer &dst, Vector2D<int> pos, const Rectangle<int> &area);
     // SetTransparentColor sets transparent color
     void SetTransparentColor(std::optional<PixelColor> c);
 
@@ -57,6 +58,7 @@ public:
 
     int Width() const;
     int Height() const;
+    Vector2D<int> Size() const;
 
 
 private:

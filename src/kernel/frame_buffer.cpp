@@ -104,6 +104,36 @@ Error FrameBuffer::Copy(Vector2D<int> pos, const FrameBuffer &src) {
     return MAKE_ERROR(Error::kSuccess);
 }
 
+// pos は交差領域の絶対位置
+// src_area.pos は pos からの相対位置
+Error FrameBuffer::Copy(Vector2D<int> pos, const FrameBuffer &src, const Rectangle<int> &src_area) {
+    if (config_.pixel_format != src.config_.pixel_format) {
+        return MAKE_ERROR(Error::kUnknownPixelFormat);
+    }
+
+    const auto bytes_per_pixel = bytesPerPixel(config_.pixel_format);
+    if (bytes_per_pixel <= 0) {
+        return MAKE_ERROR(Error::kUnknownPixelFormat);
+    }
+
+    const Rectangle<int> src_area_shifted{pos, src_area.size};
+    const Rectangle<int> src_outline{pos-src_area.pos, frameBufferSize(src.config_)}; // src_area.pos = pos - target_abs_pos
+    const Rectangle<int> dst_outline{{0, 0}, frameBufferSize(config_)};
+    const auto copy_area = dst_outline & src_outline & src_area_shifted;
+    const auto src_start_pos = copy_area.pos - (pos - src_area.pos);
+
+    uint8_t *dst_buf = frameAddrAt(copy_area.pos, config_);
+    const uint8_t *src_buf = frameAddrAt(src_start_pos, src.config_);
+
+    for (int dy = 0; dy < copy_area.size.y; ++dy) {
+        memcpy(dst_buf, src_buf, bytes_per_pixel * copy_area.size.x);
+        dst_buf += bytesPerScanLine(config_);
+        src_buf += bytesPerScanLine(src.config_);
+    }
+
+    return MAKE_ERROR(Error::kSuccess);
+}
+
 void FrameBuffer::Move(Vector2D<int> dst_pos, const Rectangle<int> &src) {
     const auto bytes_per_pixel = bytesPerPixel(config_.pixel_format);
     const auto bytes_per_scan_line = bytesPerScanLine(config_);

@@ -29,6 +29,9 @@ public:
     Layer &MoveRelative(Vector2D<int> pos_diff);
     // DrawTo draws the current window to the given writer
     void DrawTo(FrameBuffer &screen) const;
+    void DrawTo(FrameBuffer &screen, const Rectangle<int> &area);
+
+    Vector2D<int> GetPosition() const;
 };
 
 class LayerManager {
@@ -46,7 +49,13 @@ public:
     void SetWriter(FrameBuffer *screen);
     // Create new Layer. The new Layer will be maintained in the LayerManager
     Layer &NewLayer();
+    // draw all layer, entire screen
     void Draw() const;
+    // draw specified area in the screen
+    void Draw(const Rectangle<int> &area);
+    // draw specified layer and above
+    void Draw(unsigned int id);
+
     // Move moves the layer specified by id, to the new position
     void Move(unsigned int id, Vector2D<int> new_position);
     void MoveRelative(unsigned int id, Vector2D<int> pos_diff);

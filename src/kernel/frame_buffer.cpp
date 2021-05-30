@@ -30,6 +30,13 @@ namespace {
         return bytesPerPixel(config.pixel_format) * config.pixels_per_scan_line;
     }
 
+    Vector2D<int> frameBufferSize(const FrameBufferConfig &config) {
+        return {
+            static_cast<int>(config.horizontal_resolution),
+            static_cast<int>(config.vertical_resolution)
+        };
+    }
+
     uint8_t *frameAddrAt(Vector2D<int> pos, const FrameBufferConfig &config) {
         return config.frame_buffer + bytesPerPixel(config.pixel_format) *
             (pos.x + config.pixels_per_scan_line * pos.y);
@@ -74,32 +81,24 @@ Error FrameBuffer::Copy(Vector2D<int> pos, const FrameBuffer &src) {
         return MAKE_ERROR(Error::kUnknownPixelFormat);
     }
 
-    const auto bits_per_pixel = bitsPerPixel(config_.pixel_format);
-    if (bits_per_pixel <= 0) {
+    const auto bytes_per_pixel = bytesPerPixel(config_.pixel_format);
+    if (bytes_per_pixel <= 0) {
         return MAKE_ERROR(Error::kUnknownPixelFormat);
     }
 
-    const auto dst_width = config_.horizontal_resolution;
-    const auto dst_height = config_.vertical_resolution;
-    const auto src_width = src.config_.horizontal_resolution;
-    const auto src_height = src.config_.vertical_resolution;
+    const auto dst_size = frameBufferSize(config_);
+    const auto src_size = frameBufferSize(src.config_);
 
-    const int copy_start_dst_x = std::max(pos.x, 0);
-    const int copy_start_dst_y = std::max(pos.y, 0);
-    const int copy_end_dst_x = std::min(pos.x+src_width, dst_width);
-    const int copy_end_dst_y = std::min(pos.y+src_height, dst_height);
+    const Vector2D<int> dst_start = ElementMax(pos, {0, 0});
+    const Vector2D<int> dst_end = ElementMin(pos+src_size, dst_size);
 
-    const auto bytes_per_pixel = (bits_per_pixel+7) / 8; //align 8
-    const auto bytes_per_copy_line = bytes_per_pixel * (copy_end_dst_x-copy_start_dst_x);
+    uint8_t *dst_buf = frameAddrAt(dst_start, config_);
+    const uint8_t *src_buf = frameAddrAt({0, 0}, src.config_);
 
-    uint8_t *dst_buf = config_.frame_buffer +
-        bytes_per_pixel * (copy_start_dst_x + config_.pixels_per_scan_line*copy_start_dst_y);
-    const uint8_t *src_buf = src.config_.frame_buffer;
-
-    for (int dy = 0; dy < copy_end_dst_y; ++dy) {
-        memcpy(dst_buf, src_buf, bytes_per_copy_line);
-        dst_buf += bytes_per_pixel * config_.pixels_per_scan_line;
-        src_buf += bytes_per_pixel * src.config_.pixels_per_scan_line;
+    for (int dy = dst_start.y; dy < dst_end.y; ++dy) {
+        memcpy(dst_buf, src_buf, bytes_per_pixel * (dst_end.x - dst_start.x));
+        dst_buf += bytesPerScanLine(config_);
+        src_buf += bytesPerScanLine(src.config_);
     }
 
     return MAKE_ERROR(Error::kSuccess);

@@ -1,5 +1,37 @@
 #include "window.hpp"
 #include "logger.hpp"
+#include "font.hpp"
+
+
+namespace {
+    const int kCloseButtonWidth = 16;
+    const int kCloseButtonHeight = 14;
+    const char closeButtonMap[kCloseButtonHeight][kCloseButtonWidth+1] = {
+        "...............@",
+        ".:::::::::::::$@",
+        ".:::::::::::::$@",
+        ".:::@@::::@@::$@",
+        ".::::@@::@@:::$@",
+        ".:::::@@@@::::$@",
+        ".::::::@@:::::$@",
+        ".:::::@@@@::::$@",
+        ".::::@@::@@:::$@",
+        ".:::@@::::@@::$@",
+        ".:::::::::::::$@",
+        ".:::::::::::::$@",
+        ".$$$$$$$$$$$$$$@",
+        "@@@@@@@@@@@@@@@@",
+    };
+
+    constexpr PixelColor toColor(uint32_t color) {
+        return {
+            static_cast<uint8_t>((color >> 16) & 0xff),
+            static_cast<uint8_t>((color >> 8) & 0xff),
+            static_cast<uint8_t>(color & 0xff)
+        };
+    }
+}
+
 
 Window::Window(int width, int height, PixelFormat shadow_format)
     : width_{width}, height_{height} {
@@ -74,4 +106,52 @@ int Window::Width() const {
 
 int Window::Height() const {
     return height_;
+}
+
+
+void DrawWindow(PixelWriter &writer, const char *title) {
+    auto fillRect = [&writer](Vector2D<int> pos, Vector2D<int> size, uint32_t color) {
+        FillRectangle(writer, pos, size, toColor(color));
+    };
+
+    const auto win_w = writer.Width();
+    const auto win_h = writer.Height();
+
+    // outline with shadow
+    // top
+    fillRect({0, 0},        {win_w, 1},         0xc6c6c6);
+    fillRect({1, 1},        {win_w-2, 1},       0xffffff);
+    // left
+    fillRect({0, 0},        {1, win_h},         0xc6c6c6);
+    fillRect({1, 1},        {1, win_h-2},       0xffffff);
+    // right
+    fillRect({win_w-2, 1},  {1, win_h-2},       0x848484);
+    fillRect({win_w-1, 0},  {1, win_h},         0x000000);
+    // bottom
+    fillRect({1, win_h-2},  {win_w-2, 1},       0x848484);
+    fillRect({0, win_h-1},  {win_w, 1},         0x000000);
+    // window
+    fillRect({2, 2},        {win_w-4, win_h-4}, 0xc6c6c6);
+    // top bar
+    fillRect({3, 3},        {win_w-6, 18},      0x000084);
+
+    // top bar title
+    WriteString(writer, 24, 4, title, toColor(0xffffff));
+
+    // close button
+    for (int y = 0; y < kCloseButtonHeight; ++y) {
+        for (int x = 0; x < kCloseButtonWidth; ++x) {
+            auto c = toColor(0xffffff);
+            switch (closeButtonMap[y][x]) {
+            case '@':
+                c = toColor(0x000000); break;
+            case '$':
+                c = toColor(0x848484); break;
+            case ':':
+                c = toColor(0xc6c6c6); break;
+            }
+
+            writer.Write({win_w-5-kCloseButtonWidth + x, 5 + y}, c);
+        }
+    }
 }

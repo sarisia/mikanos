@@ -37,6 +37,8 @@ public:
 class LayerManager {
 private:
     FrameBuffer *screen_{nullptr};
+    // back buffer
+    mutable FrameBuffer back_buffer_{};
     std::vector<std::unique_ptr<Layer>> layers_{};
     // start is most back, end is most top
     std::vector<Layer *> layer_stack_{};
@@ -49,12 +51,10 @@ public:
     void SetWriter(FrameBuffer *screen);
     // Create new Layer. The new Layer will be maintained in the LayerManager
     Layer &NewLayer();
-    // draw all layer, entire screen
-    void Draw() const;
     // draw specified area in the screen
-    void Draw(const Rectangle<int> &area);
+    void Draw(const Rectangle<int> &area) const;
     // draw specified layer and above
-    void Draw(unsigned int id);
+    void Draw(unsigned int id) const;
 
     // Move moves the layer specified by id, to the new position
     void Move(unsigned int id, Vector2D<int> new_position);

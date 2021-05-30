@@ -59,6 +59,11 @@ Layer *LayerManager::findLayer(unsigned int id) {
 
 void LayerManager::SetWriter(FrameBuffer *screen) {
     screen_ = screen;
+
+    // initialize back buffer
+    FrameBufferConfig back_config = screen->Config();
+    back_config.frame_buffer = nullptr;
+    back_buffer_.Initialize(back_config);
 }
 
 Layer &LayerManager::NewLayer() {
@@ -66,19 +71,16 @@ Layer &LayerManager::NewLayer() {
     return *layers_.emplace_back(new Layer{latest_id_});
 }
 
-void LayerManager::Draw() const {
+void LayerManager::Draw(const Rectangle<int> &area) const {
     for (auto layer: layer_stack_) {
-        layer->DrawTo(*screen_);
+        layer->DrawTo(back_buffer_, area);
     }
+
+    // copy to front
+    screen_->Copy(area.pos, back_buffer_, area);
 }
 
-void LayerManager::Draw(const Rectangle<int> &area) {
-    for (auto layer: layer_stack_) {
-        layer->DrawTo(*screen_, area);
-    }
-}
-
-void LayerManager::Draw(unsigned int id) {
+void LayerManager::Draw(unsigned int id) const {
     bool draw = false;
     Rectangle<int> window_area;
 
@@ -90,9 +92,12 @@ void LayerManager::Draw(unsigned int id) {
         }
 
         if (draw) {
-            layer->DrawTo(*screen_, window_area);
+            layer->DrawTo(back_buffer_, window_area);
         }
     }
+
+    // copy to front
+    screen_->Copy(window_area.pos, back_buffer_, window_area);
 }
 
 void LayerManager::Move(unsigned int id, Vector2D<int> new_position) {

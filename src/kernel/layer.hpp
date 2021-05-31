@@ -9,8 +9,9 @@
 class Layer {
 private:
     unsigned int id_;
-    Vector2D<int> pos_;
-    std::shared_ptr<Window> window_;
+    Vector2D<int> pos_{};
+    std::shared_ptr<Window> window_{};
+    bool draggable_{false};
 
 public:
     Layer(unsigned int id);
@@ -32,6 +33,9 @@ public:
     void DrawTo(FrameBuffer &screen, const Rectangle<int> &area);
 
     Vector2D<int> GetPosition() const;
+    
+    Layer &SetDraggable(bool draggable);
+    bool IsDraggable() const;
 };
 
 class LayerManager {

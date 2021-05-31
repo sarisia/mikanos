@@ -41,6 +41,15 @@ Vector2D<int> Layer::GetPosition() const {
     return pos_;
 }
 
+Layer &Layer::SetDraggable(bool draggable) {
+    draggable_ = draggable;
+    return *this;
+}
+
+bool Layer::IsDraggable() const {
+    return draggable_;
+}
+
 
 // LayerManager
 

@@ -64,6 +64,8 @@ public:
     // if new_pos is higher than layer_stack_.size(), the window goes topmost.
     void UpDown(unsigned int id, int new_height);
     void Hide(unsigned int id);
+
+    Layer *FindLayerByPosition(Vector2D<int> pos, unsigned int exclude_id) const;
 };
 
 // global LayerManager

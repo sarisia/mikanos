@@ -81,3 +81,4 @@ hankaku.o: hankaku.bin
 .PHONY: clean
 clean:
 	rm -rf *.o *.elf *.bin
+	rm -rf usb/*.o usb/xhci/*.o usb/classdriver/*.o

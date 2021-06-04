@@ -115,6 +115,7 @@ void KernelMainNewStack(
         WriteString(*main_window->Writer(), {24, 28}, str, {0, 0, 0});
         layer_manager->Draw(main_window_layer_id); // only refresh main window
 
+        InitializeLAPICTimer();
 
         __asm__("cli"); // Clear interrupt flag
 
@@ -132,6 +133,9 @@ void KernelMainNewStack(
         switch (msg.type) {
         case Message::kInterruptXHCI:
             usb::xhci::ProcessEvents();
+            break;
+        case Message::kInterruptLAPICTimer:
+            printk("Timer interrupt\n");
             break;
         default:
             Log(kError, "Unknown interrupt message (%d)\n", msg.type);

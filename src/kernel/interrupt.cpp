@@ -29,14 +29,22 @@ namespace {
         msg_queue->push_back(Message{ Message::kInterruptXHCI });
         NotifyEndOfInterrupt();
     }
-    
+
+    __attribute__((interrupt))
+    void intHandlerLAPICTimer(InterruptFrame *frame) {
+        msg_queue->push_back(Message{Message::kInterruptLAPICTimer});
+        NotifyEndOfInterrupt();
+    }    
 }
 
 void InitializeInterrupt(std::deque<Message> *msg_queue) {
     ::msg_queue = msg_queue;
 
-    // register interrupt handler
+    // USB
     SetIDTEntry(idt[InterruptVector::kXHCI], MakeIDTAttr(DescriptorType::kInterruptGate, 0),
         reinterpret_cast<uint64_t>(intHandlerXHCI), kKernelCS);
+    // Timer
+    SetIDTEntry(idt[InterruptVector::kLAPICTimer], MakeIDTAttr(DescriptorType::kInterruptGate, 0),
+        reinterpret_cast<uint64_t>(intHandlerLAPICTimer), kKernelCS);
     LoadIDT(sizeof(idt) - 1, reinterpret_cast<uintptr_t>(&idt[0]));
 }

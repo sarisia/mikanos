@@ -30,3 +30,8 @@ private:
     // refresh dumps all lines in the buffer
     void refresh();
 };
+
+
+extern Console *console;
+
+void InitializeConsole();

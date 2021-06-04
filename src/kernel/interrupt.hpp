@@ -2,8 +2,10 @@
 
 #include <cstdint>
 #include <array>
+#include <deque>
 
 #include "x86_descriptor.hpp"
+#include "message.hpp"
 
 struct InterruptFrame {
     uint64_t rip;
@@ -63,3 +65,6 @@ constexpr InterruptDescriptorAttribute MakeIDTAttr(
     attr.bits.present = present;
     return attr;
 }
+
+
+void InitializeInterrupt(std::deque<Message> *msg_queue);

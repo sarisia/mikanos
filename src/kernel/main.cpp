@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <cstdio>
+#include <deque>
 
 #include "frame_buffer_config.hpp"
 #include "memory_map.hpp"
@@ -19,6 +20,7 @@
 #include "window.hpp"
 #include "layer.hpp"
 #include "timer.hpp"
+#include "message.hpp"
 
 #include "usb/device.hpp"
 #include "usb/memory.hpp"
@@ -32,55 +34,6 @@ int printk(const char* format, ...);
 void operator delete(void* obj) noexcept {}
 
 
-char pixel_writer_buf[sizeof(RGBResv8BitPerColorPixelWriter)];
-PixelWriter* pixel_writer;
-
-char console_buf[sizeof(Console)];
-Console* console;
-
-char memory_manager_buf[sizeof(BitmapMemoryManager)];
-BitmapMemoryManager *memory_manager;
-
-// char mouse_cursor_buf[sizeof(MouseCursor)];
-// MouseCursor* mouse_cursor;
-
-// layer id of mouse cursor
-unsigned int mouse_layer_id;
-Vector2D<int> screen_size;
-Vector2D<int> mouse_position;
-
-void MouseObserver(uint8_t buttons, int8_t displacement_x, int8_t displacement_y) {
-    static unsigned int mouse_drag_layer_id = 0;
-    static uint8_t previous_buttons = 0;
-
-    const auto oldpos = mouse_position;
-    auto newpos = mouse_position + Vector2D<int>{displacement_x, displacement_y};
-    newpos = ElementMin(newpos, screen_size + Vector2D<int>{-1, -1});
-    mouse_position = ElementMax(newpos, {0, 0});
-
-    const auto posdiff = mouse_position - oldpos;
-
-    layer_manager->Move(mouse_layer_id, mouse_position);
-
-    // check click state
-    const bool previous_left_pressed = (previous_buttons & 0x01);
-    const bool left_pressed = (buttons & 0x01);
-    if (!previous_left_pressed && left_pressed) {
-        auto layer = layer_manager->FindLayerByPosition(mouse_position, mouse_layer_id);
-        if (layer && layer->IsDraggable()) {
-            mouse_drag_layer_id = layer->ID();
-        }
-    } else if (previous_left_pressed && left_pressed) {
-        if (mouse_drag_layer_id > 0) {
-            layer_manager->MoveRelative(mouse_drag_layer_id, posdiff);
-        }
-    } else if (previous_left_pressed && !left_pressed) {
-        mouse_drag_layer_id = 0;
-    }
-
-    previous_buttons = buttons;
-}
-
 int printk(const char* format, ...) {
     va_list ap;
     int result;
@@ -90,58 +43,31 @@ int printk(const char* format, ...) {
     result = vsprintf(s, format, ap);
     va_end(ap);
 
-    // profile console output
-    StartLAPICTimer();
-
     console->PutString(s);
-
-    auto elapsed = LAPICTimerElapsed();
-    StopLAPICTimer();
-
-    // overwrite with timestamp added string
-    sprintf(s, "[%09d] ", elapsed);
-    console->PutString(s);
-
     return result;
 }
 
-void SwitchEhci2Xhci(const pci::Device& xhc_dev) {
-    bool intel_ehc_exist = false;
-    for (int i = 0; i < pci::num_device; ++i) {
-        if (pci::devices[i].class_code.Match(0x0cu, 0x03u, 0x20u) // EHCI
-            && pci::ReadVendorID(pci::devices[i]) == 0x8086u) { // Intel
-            intel_ehc_exist = true;
-            break;   
-        }
-    }
 
-    if (!intel_ehc_exist) {
-        return;
-    }
+std::shared_ptr<Window> main_window;
+unsigned int main_window_layer_id;
 
-    uint32_t superspeed_ports = pci::ReadConfReg(xhc_dev, 0xdcu); // USB3PRM, PCI Device dependent region
-    pci::WriteConfigReg(xhc_dev, 0xd8u, superspeed_ports); // USB3_PSSEN
-    uint32_t ehci2xhci_ports = pci::ReadConfReg(xhc_dev, 0xd4u); // XUSB2PRM
-    pci::WriteConfigReg(xhc_dev, 0xd0u, ehci2xhci_ports); //XUSB2PR
+void InitializeMainWindow() {
+    // make window
+    main_window = std::make_shared<Window>(160, 52, screen_config.pixel_format);
+    DrawWindow(*main_window->Writer(), "Hello window!");
 
-    Log(kDebug, "SwitchEhci2Xhci: SS=%02x, xHCI=%02x\n", superspeed_ports, ehci2xhci_ports);
+    main_window_layer_id = layer_manager->NewLayer()
+        .SetWindow(main_window)
+        .SetDraggable(true)
+        .Move({ 300, 100 })
+        .ID();
+
+    layer_manager->UpDown(main_window_layer_id, 2);
 }
 
-usb::xhci::Controller* xhc;
 
-struct Message {
-    enum Type {
-        kInterruptXHCI,
-    } type;
-};
+std::deque<Message> *main_queue;
 
-ArrayQueue<Message>* main_queue;
-
-__attribute__((interrupt))
-void IntHandlerXHCI(InterruptFrame* frame) {
-    main_queue->Push(Message{Message::kInterruptXHCI});
-    NotifyEndOfInterrupt();
-}
 
 alignas(16) uint8_t kernel_main_stack[1024*1024];
 
@@ -150,228 +76,32 @@ void KernelMainNewStack(
     const struct FrameBufferConfig& frame_buffer_config_ref,
     const struct MemoryMap& memory_map_ref
 ) {
-    FrameBufferConfig frame_buffer_config{frame_buffer_config_ref};
+    // FrameBufferConfig frame_buffer_config{frame_buffer_config_ref};
     MemoryMap memory_map{memory_map_ref};
 
-    switch (frame_buffer_config.pixel_format) {
-    case kPixelRGBResv8BitPerColor:
-        pixel_writer = new(pixel_writer_buf) RGBResv8BitPerColorPixelWriter(frame_buffer_config);
-        break;
-    case kPixelBGRResv8BitPerColor:
-        pixel_writer = new(pixel_writer_buf) BGRResv8BitPerColorPixelWriter(frame_buffer_config);
-        break;
-    }
+    InitializeGraphics(frame_buffer_config_ref);
+    InitializeConsole();
 
-    DrawDesktop(*pixel_writer);
-
-    console = new(console_buf) Console{kDesktopFGColor, kDesktopBGColor};
-    console->SetWriter(pixel_writer);
-    
     printk("Welcome to MikanOS!\n");
     SetLogLevel(kDebug);
 
-    // initialize timer
-    InitializeLAPICTimer();
-
-    // setup segments
-    SetupSegments();
-
-    const uint16_t kernel_cs = 1 << 3;
-    const uint16_t kernel_ss = 2 << 3;
-    SetDSAll(0);
-    SetCSSS(kernel_cs, kernel_ss);
-
-    SetupIdentityPageTable();
-
-    // initialize memory manager
-    ::memory_manager = new(memory_manager_buf) BitmapMemoryManager;
-
-    // mark in-used memory
-    const auto memory_map_base = reinterpret_cast<uintptr_t>(memory_map.buffer);
-    uintptr_t available_end = 0; // 最後の未使用領域の末尾のアドレス
-
-    for (uintptr_t iter = memory_map_base; iter < memory_map_base + memory_map.map_size; iter += memory_map.descriptor_size) {
-        auto desc = reinterpret_cast<const MemoryDescriptor *>(iter);
-        if (desc->physical_start > available_end) {
-            memory_manager->MarkAllocated(
-                FrameID{available_end / kBytesPerFrame},
-                (desc->physical_start - available_end) / kBytesPerFrame
-            );
-        }
-
-        const auto physical_end = desc->physical_start + desc->number_of_pages*kUEFIPageSize;
-        if (IsAvailable(static_cast<MemoryType>(desc->type))) {
-            available_end = physical_end;
-        } else {
-            memory_manager->MarkAllocated(
-                FrameID{desc->physical_start / kBytesPerFrame},
-                desc->number_of_pages * kUEFIPageSize / kBytesPerFrame
-            );
-        }
-    }
-
-    memory_manager->SetMemoryRange(FrameID{ 1 }, FrameID{ available_end / kBytesPerFrame });
-
-    // initialize heap
-    if (auto err = InitializeHeap(*memory_manager)) {
-        Log(kError, "failed to allocate heap (%s) at %s:%d\n", err.Name(), err.File(), err.Line());
-        exit(1); // is exit() work?
-    }
+    InitializeSegmentation();
+    InitializePaging();
+    InitializeMemoryManager(memory_map);
 
     SetLogLevel(kWarn);
 
+    ::main_queue = new std::deque<Message>(32);
+    InitializeInterrupt(main_queue);
 
-    // initialize event queue
-    std::array <Message,32> main_queue_data;
-    ArrayQueue<Message> main_queue{main_queue_data};
-    ::main_queue = &main_queue;
+    InitializePCI();
+    usb::xhci::Initialize();
 
-    // find all PCI devices
-    auto err = pci::ScanAllBus();
-    Log(kDebug, "ScanAllBus: %s\n", err.Name());
+    InitializeLayer();
+    InitializeMainWindow();
+    InitializeMouse();
 
-    // print all devices found
-    Log(kDebug, "PCI Devices:\n");
-    for (int i = 0; i < pci::num_device; ++i) {
-        const auto& dev = pci::devices[i];
-        auto vendor_id = pci::ReadVendorID(dev.bus, dev.device, dev.function);
-        auto class_code = pci::ReadClassCode(dev.bus, dev.device, dev.function);
-        Log(kDebug, "%d.%d.%d: vendor %04x, class %08x, head %02x\n",
-            dev.bus, dev.device, dev.function,
-            vendor_id, class_code, dev.header_type);
-    }
-
-    // find xHC device
-    pci::Device* xhc_dev = nullptr;
-    for (int i = 0; i < pci::num_device; ++i) {
-        // base 0x0c: serial bus
-        // sub 0x03: USB controller
-        // if 0x30: xHCI
-        if (pci::devices[i].class_code.Match(0x0cu, 0x03u, 0x30u)) {
-            xhc_dev = &pci::devices[i];
-
-            // prefer Intel one (vendor 0x8086)
-            if (pci::ReadVendorID(*xhc_dev) == 0x8086u) {
-                break;
-            }
-        }
-
-        if (xhc_dev) {
-            Log(kInfo, "found xHC: %d.%d.%d\n", xhc_dev->bus, xhc_dev->device, xhc_dev->function);
-        }
-    }
-
-
-    // register interrupt handler
-    SetIDTEntry(idt[InterruptVector::kXHCI], MakeIDTAttr(DescriptorType::kInterruptGate, 0),
-                reinterpret_cast<uint64_t>(IntHandlerXHCI), kernel_cs);
-    LoadIDT(sizeof(idt)-1, reinterpret_cast<uintptr_t>(&idt[0]));
-
-    const uint8_t bsp_local_apic_id = *reinterpret_cast<const uint32_t*>(0xfee00020) >> 24;
-    pci::ConfigureMSIFixedDestination(
-        *xhc_dev,
-        bsp_local_apic_id,
-        pci::MSITriggerMode::kLevel,
-        pci::MSIDeliveryMode::kFixed,
-        InterruptVector::kXHCI,
-        0
-    );
-
-
-    const WithError<uint64_t> xhc_bar = pci::ReadBar(*xhc_dev, 0);
-    Log(kDebug, "ReadBar: %s\n", xhc_bar.error.Name());
-    const uint64_t xhc_mmio_base = xhc_bar.value & ~static_cast<uint64_t>(0xf);
-    Log(kDebug, "xHC mmio_base: %08lx\n", xhc_mmio_base);
-
-    // initialize xHC
-    usb::xhci::Controller xhc{xhc_mmio_base};
-    
-    // workaround for Intel Panther Point
-    if (pci::ReadVendorID(*xhc_dev) == 0x8086u) {
-        SwitchEhci2Xhci(*xhc_dev);
-    }
-
-    if (auto err = xhc.Initialize()) {
-        Log(kDebug, "xhc.Initialize: %s\n", err.Name());
-    }
-
-    Log(kInfo, "Starting xHC\n");
-    xhc.Run();
-
-    ::xhc = &xhc;
-
-    // register USB event handler
-    usb::HIDMouseDriver::default_observer = MouseObserver;
-    
-    for (int i = 1; i <= xhc.MaxPorts(); ++i) {
-        auto port = xhc.PortAt(i);
-        Log(kDebug, "Port %d: IsConnected=%d\n", i, port.IsConnected());
-
-        if (port.IsConnected()) {
-            if (auto err = ConfigurePort(xhc, port)) {
-                Log(kError, "Failed to configure port (%s) at %s:%d\n", err.Name(), err.File(), err.Line());
-                continue;
-            }
-        }
-    }
-
-
-    // desktop
-    screen_size.x = frame_buffer_config.horizontal_resolution;
-    screen_size.y = frame_buffer_config.vertical_resolution;
-
-    auto bg_window = std::make_shared<Window>(screen_size.x, screen_size.y, frame_buffer_config.pixel_format);
-    auto bg_writer = bg_window->Writer();
-
-    DrawDesktop(*bg_writer);
-
-    // console
-    auto console_window = std::make_shared<Window>(Console::kColumns*8, Console::kRows*16, frame_buffer_config.pixel_format);
-    console->SetWindow(console_window);
-
-    auto mouse_window = std::make_shared<Window>(kMouseCursorWidth, kMouseCursorHeight, frame_buffer_config.pixel_format);
-    mouse_window->SetTransparentColor(kMouseTransparentColor);
-    // actually this initializes window buffer
-    DrawMouseCursor(mouse_window->Writer(), {0, 0});
-    mouse_position = {200, 200};
-
-    // make window
-    auto main_window = std::make_shared<Window>(160, 52, frame_buffer_config.pixel_format);
-    DrawWindow(*main_window->Writer(), "Hello window!");
-
-    // real screen
-    FrameBuffer screen;
-    if (auto err = screen.Initialize(frame_buffer_config)) {
-        Log(kError, "Failed to initialize frame buffer (%s) at %s:%d\n",
-            err.Name(), err.File(), err.Line());
-    }
-
-    layer_manager = new LayerManager();
-    layer_manager->SetWriter(&screen);
-
-    auto bglayer_id = layer_manager->NewLayer()
-        .SetWindow(bg_window)
-        .Move({0, 0})
-        .ID();
-    mouse_layer_id = layer_manager->NewLayer()
-        .SetWindow(mouse_window)
-        .Move(mouse_position)
-        .ID();
-    auto main_window_layer_id = layer_manager->NewLayer()
-        .SetWindow(main_window)
-        .SetDraggable(true)
-        .Move({300, 100})
-        .ID();
-    console->SetLayerID(layer_manager->NewLayer()
-        .SetWindow(console_window)
-        .Move({0, 0})
-        .ID());
-
-    layer_manager->UpDown(bglayer_id, 0);
-    layer_manager->UpDown(console->LayerID(), 1);
-    layer_manager->UpDown(main_window_layer_id, 2);
-    layer_manager->UpDown(mouse_layer_id, 3);
-    layer_manager->Draw({{0, 0}, screen_size}); // draw all
+    layer_manager->Draw({ {0, 0}, ScreenSize() }); // draw all
 
     // counter
     char str[128];
@@ -388,25 +118,20 @@ void KernelMainNewStack(
 
         __asm__("cli"); // Clear interrupt flag
 
-        if (main_queue.Count() == 0) {
+        if (main_queue->size() == 0) {
             // empty, enable interrupt and halt
             __asm__("sti"); // set interrupt flag
             // __asm__("hlt");
             continue;
         }
 
-        auto msg = main_queue.Front();
-        main_queue.Pop();
+        auto msg = main_queue->front();
+        main_queue->pop_front();
         __asm__("sti");
 
         switch (msg.type) {
         case Message::kInterruptXHCI:
-            while (xhc.PrimaryEventRing()->HasFront()) {
-                if (auto err = ProcessEvent(xhc)) {
-                    Log(kError, "Error while ProcessEvent (%s) at %s:%d\n",
-                        err.Name(), err.File(), err.Line());
-                }
-            }
+            usb::xhci::ProcessEvents();
             break;
         default:
             Log(kError, "Unknown interrupt message (%d)\n", msg.type);

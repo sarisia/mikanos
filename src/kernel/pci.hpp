@@ -139,3 +139,6 @@ Error ConfigureMSIFixedDestination(
 );
 
 }
+
+
+void InitializePCI();

@@ -19,6 +19,7 @@ OBJS= \
 	layer.o \
 	timer.o \
 	frame_buffer.o \
+	acpi.o \
 	usb/memory.o \
 	usb/device.o \
 	usb/classdriver/base.o \

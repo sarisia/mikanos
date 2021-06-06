@@ -21,6 +21,7 @@
 #include "layer.hpp"
 #include "timer.hpp"
 #include "message.hpp"
+#include "acpi.hpp"
 
 #include "usb/device.hpp"
 #include "usb/memory.hpp"
@@ -74,7 +75,8 @@ alignas(16) uint8_t kernel_main_stack[1024*1024];
 extern "C"
 void KernelMainNewStack(
     const struct FrameBufferConfig& frame_buffer_config_ref,
-    const struct MemoryMap& memory_map_ref
+    const struct MemoryMap& memory_map_ref,
+    const acpi::RSDP &acpi_table // root system descriptor pointer
 ) {
     // FrameBufferConfig frame_buffer_config{frame_buffer_config_ref};
     MemoryMap memory_map{memory_map_ref};
@@ -102,6 +104,8 @@ void KernelMainNewStack(
     InitializeMouse();
 
     layer_manager->Draw({ {0, 0}, ScreenSize() }); // draw all
+
+    acpi::Initialize(acpi_table);
     InitializeLAPICTimer(*main_queue);
     timer_manager->AddTimer(Timer{200, 2});
     timer_manager->AddTimer(Timer{600, -1});

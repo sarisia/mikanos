@@ -37,7 +37,10 @@ public:
 };
 
 
+const int kTimerFreq = 100;
+
 extern TimerManager *timer_manager;
+extern unsigned long lapic_timer_freq;
 
 // initialize Local APIC timer
 void InitializeLAPICTimer(std::deque<Message> &msg_queue);

@@ -51,8 +51,12 @@ struct FADT {
     char reserved3[276 - 116];
 } __attribute__((packed));
 
+
+const int kPMTimerFreq = 3579545;
+
 extern const FADT *fadt;
 
 void Initialize(const RSDP &rsdp);
+void WaitMilliseconds(unsigned long msec);
 
 } // namespace acpi

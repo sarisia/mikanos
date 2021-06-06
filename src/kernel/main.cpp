@@ -22,6 +22,7 @@
 #include "timer.hpp"
 #include "message.hpp"
 #include "acpi.hpp"
+#include "keyboard.hpp"
 
 #include "usb/device.hpp"
 #include "usb/memory.hpp"
@@ -110,6 +111,8 @@ void KernelMainNewStack(
     timer_manager->AddTimer(Timer{200, 2});
     timer_manager->AddTimer(Timer{600, -1});
 
+    InitializeKeyboard(*main_queue);
+
     // counter
     char str[128];
 
@@ -143,10 +146,15 @@ void KernelMainNewStack(
             break;
         case Message::kTimerTimeout:
             printk("Timer: timeout %lu, value %d\n", msg.arg.timer.timeout, msg.arg.timer.value);
-            if (msg.arg.timer.value > 0) {
-                timer_manager->AddTimer(Timer{
-                    msg.arg.timer.timeout + 100, msg.arg.timer.value + 1
-                });
+            // if (msg.arg.timer.value > 0) {
+            //     timer_manager->AddTimer(Timer{
+            //         msg.arg.timer.timeout + 100, msg.arg.timer.value + 1
+            //     });
+            // }
+            break;
+        case Message::kKeyPush:
+            if (msg.arg.keyboard.ascii != 0) {
+                printk("%c", msg.arg.keyboard.ascii);
             }
             break;
         default:

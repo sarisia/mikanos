@@ -20,6 +20,7 @@ OBJS= \
 	timer.o \
 	frame_buffer.o \
 	acpi.o \
+	keyboard.o \
 	usb/memory.o \
 	usb/device.o \
 	usb/classdriver/base.o \

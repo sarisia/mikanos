@@ -36,7 +36,7 @@ public:
     unsigned long CurrentTick() const;
 };
 
-
+// interrupts per sec
 const int kTimerFreq = 100;
 
 extern TimerManager *timer_manager;

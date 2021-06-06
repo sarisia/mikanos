@@ -50,6 +50,8 @@ int printk(const char* format, ...) {
 }
 
 
+// main window (counter)
+
 std::shared_ptr<Window> main_window;
 unsigned int main_window_layer_id;
 
@@ -65,6 +67,52 @@ void InitializeMainWindow() {
         .ID();
 
     layer_manager->UpDown(main_window_layer_id, 2);
+}
+
+// text box window
+
+std::shared_ptr<Window> text_window;
+unsigned int text_window_layer_id;
+
+void InitializeTextWindow() {
+    const int win_w = 160;
+    const int win_h = 52;
+
+    text_window = std::make_shared<Window>(win_w, win_h, screen_config.pixel_format);
+    DrawWindow(*text_window->Writer(), "Text box test");
+    DrawTextbox(*text_window->Writer(), {4, 24}, {win_w-8, win_h-24-4});
+
+    text_window_layer_id = layer_manager->NewLayer()
+        .SetWindow(text_window)
+        .SetDraggable(true)
+        .Move({ 350, 150 })
+        .ID();
+
+    layer_manager->UpDown(text_window_layer_id, std::numeric_limits<int>::max());
+}
+
+int text_window_index;
+
+void InputTextWindow(char c) {
+    if (c == 0) {
+        return;
+    }
+
+    auto pos = []() {
+        return Vector2D<int>{8 + 8*text_window_index, 24+6};
+    };
+
+    const int max_chars = (text_window->Width() - 16) / 8;
+    if (c == '\b' && text_window_index > 0) { // backspace
+        --text_window_index;
+        // update 1 char
+        FillRectangle(*text_window->Writer(), pos(), {8, 16}, toColor(0xffffff));
+    } else if (c >= ' ' && text_window_index < max_chars) { // ascii 0x20: space
+        WriteAscii(*text_window->Writer(), pos(), c, toColor(0));
+        ++text_window_index;
+    }
+
+    layer_manager->Draw(text_window_layer_id);
 }
 
 
@@ -102,6 +150,7 @@ void KernelMainNewStack(
 
     InitializeLayer();
     InitializeMainWindow();
+    InitializeTextWindow();
     InitializeMouse();
 
     layer_manager->Draw({ {0, 0}, ScreenSize() }); // draw all
@@ -153,9 +202,7 @@ void KernelMainNewStack(
             // }
             break;
         case Message::kKeyPush:
-            if (msg.arg.keyboard.ascii != 0) {
-                printk("%c", msg.arg.keyboard.ascii);
-            }
+            InputTextWindow(msg.arg.keyboard.ascii);
             break;
         default:
             Log(kError, "Unknown interrupt message (%d)\n", msg.type);

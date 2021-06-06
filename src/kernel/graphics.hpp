@@ -138,3 +138,11 @@ extern PixelWriter* screen_writer;
 
 Vector2D<int> ScreenSize();
 void InitializeGraphics(const FrameBufferConfig &screen_config);
+
+constexpr PixelColor toColor(uint32_t color) {
+    return {
+        static_cast<uint8_t>((color >> 16) & 0xff),
+        static_cast<uint8_t>((color >> 8) & 0xff),
+        static_cast<uint8_t>(color & 0xff)
+    };
+}

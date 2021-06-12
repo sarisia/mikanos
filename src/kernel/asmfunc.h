@@ -19,4 +19,8 @@ extern "C" {
 
     // set page table
     void SetCR3(uint64_t value);
+
+    uint64_t GetCR3();
+
+    void SwitchContext(void *next_ctx, void *current_ctx);
 }

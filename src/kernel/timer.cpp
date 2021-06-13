@@ -109,6 +109,6 @@ void LAPICTimerOnInterrupt() {
     NotifyEndOfInterrupt();
 
     if (is_task_timer) {
-        SwitchTask();
+        task_manager->SwitchTask();
     }
 }

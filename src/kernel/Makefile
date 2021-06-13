@@ -21,6 +21,7 @@ OBJS= \
 	frame_buffer.o \
 	acpi.o \
 	keyboard.o \
+	task.o \
 	usb/memory.o \
 	usb/device.o \
 	usb/classdriver/base.o \

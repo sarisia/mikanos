@@ -1,6 +1,8 @@
 #include "timer.hpp"
+
 #include "interrupt.hpp"
 #include "acpi.hpp"
+#include "task.hpp"
 
 
 TimerManager::TimerManager(std::deque<Message> &msg_queue):
@@ -12,14 +14,23 @@ void TimerManager::AddTimer(const Timer &timer) {
     timers_.push(timer);
 }
 
-void TimerManager::Tick() {
+bool TimerManager::Tick() {
     ++tick_;
 
+    bool is_task_timer = false;
     while (true) {
         const auto &t = timers_.top();
         if (t.Timeout() > tick_) {
             // timeout not arrived, skip
             break;
+        }
+
+        // handle task timer
+        if (t.Value() == kTaskTimerValue) {
+            is_task_timer = true;
+            timers_.pop();
+            timers_.push(Timer{tick_+kTaskTimerPeriod, kTaskTimerValue});
+            continue;
         }
 
         Message msg{Message::kTimerTimeout};
@@ -29,6 +40,8 @@ void TimerManager::Tick() {
 
         timers_.pop();
     }
+
+    return is_task_timer;
 }
 
 unsigned long TimerManager::CurrentTick() const {
@@ -92,5 +105,10 @@ void StopLAPICTimer() {
 
 
 void LAPICTimerOnInterrupt() {
-    timer_manager->Tick();
+    const bool is_task_timer = timer_manager->Tick();
+    NotifyEndOfInterrupt();
+
+    if (is_task_timer) {
+        SwitchTask();
+    }
 }

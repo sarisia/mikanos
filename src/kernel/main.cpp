@@ -227,9 +227,13 @@ void KernelMainNewStack(
 
 
     InitializeTask();
-    task_manager->NewTask().InitContext(TaskB, 45);
-    task_manager->NewTask().InitContext(TaskIdle, 0xdeadbeef);
-    task_manager->NewTask().InitContext(TaskIdle, 0xcafebabe);
+    const auto task_b_id = task_manager->NewTask()
+        .InitContext(TaskB, 45)
+        .Wakeup()
+        .ID();
+    // dummy
+    task_manager->NewTask().InitContext(TaskIdle, 0xdeadbeef).Wakeup();
+    task_manager->NewTask().InitContext(TaskIdle, 0xcafebabe).Wakeup();
 
 
     // counter
@@ -273,6 +277,16 @@ void KernelMainNewStack(
             }
             break;
         case Message::kKeyPush:
+            if ((msg.arg.keyboard.modifier & (kKbdLControlBitMask | kKbdRControlBitMask)) != 0) {
+                if (msg.arg.keyboard.ascii == 's') { // Ctrl+S
+                    printk("sleep TaskB: %s\n", task_manager->Sleep(task_b_id).Name());
+                } else if (msg.arg.keyboard.ascii == 'w') { // Ctrl+W
+                    printk("wakeup TaskB: %s\n", task_manager->Wakeup(task_b_id).Name());
+                }
+
+                break;
+            }
+
             InputTextWindow(msg.arg.keyboard.ascii);
             break;
         default:

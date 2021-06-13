@@ -36,22 +36,13 @@ const char keycode_map_shifted[256] = {
     '8',  '9',  '0',  '.', '\\',  0,    0,    '=', // 96
 };
 
-const int kLControlBitMask = 1u << 0;
-const int kLShiftBitMask   = 1u << 1;
-const int kLAltBitMask     = 1u << 2;
-const int kLGUIBitMask     = 1u << 3;
-const int kRControlBitMask = 1u << 4;
-const int kRShiftBitMask   = 1u << 5;
-const int kRAltBitMask     = 1u << 6;
-const int kRGUIBitMask     = 1u << 7;
-
 }
 
 
 void InitializeKeyboard(std::deque<Message> &msg_queue) {
     usb::HIDKeyboardDriver::default_observer = 
         [&msg_queue](uint8_t modifier, uint8_t keycode) {
-            const bool shift = (modifier & (kLShiftBitMask | kRShiftBitMask)) != 0;
+            const bool shift = (modifier & (kKbdLShiftBitMask | kKbdRShiftBitMask)) != 0;
             char ascii = keycode_map[keycode];
             if (shift) {
                 ascii = keycode_map_shifted[keycode];

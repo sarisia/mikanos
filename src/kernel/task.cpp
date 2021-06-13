@@ -2,6 +2,8 @@
 #include "timer.hpp"
 #include "asmfunc.h"
 
+alignas(16) TaskContext task_a_ctx, task_b_ctx;
+
 namespace {
     TaskContext *current_task;
 }

@@ -40,7 +40,7 @@ public:
 const int kTimerFreq = 100;
 
 // task timer
-const int kTaskTimerPeriod = static_cast<int>(kTimerFreq*0.02);
+const int kTaskTimerPeriod = static_cast<int>(kTimerFreq*1);
 const int kTaskTimerValue = std::numeric_limits<int>::min();
 
 extern TimerManager *timer_manager;

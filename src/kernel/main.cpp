@@ -37,9 +37,6 @@ int printk(const char* format, ...);
 void operator delete(void* obj) noexcept {}
 
 
-alignas(16) TaskContext task_a_ctx, task_b_ctx;
-
-
 int printk(const char* format, ...) {
     va_list ap;
     int result;

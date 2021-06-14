@@ -4,8 +4,10 @@
 #include <vector>
 #include <memory>
 #include <deque>
+#include <optional>
 
 #include "error.hpp"
+#include "message.hpp"
 
 struct TaskContext {
     uint64_t cr3, rip, rflags, reserved1; // offset 0x00
@@ -26,6 +28,7 @@ private:
     uint64_t id_;
     std::vector<uint64_t> stack_;
     alignas(16) TaskContext context_;
+    std::deque<Message> msgs_;
 
 public:
     static const size_t kDefaultStackBytes = 4096;
@@ -38,6 +41,9 @@ public:
     
     Task& Sleep();
     Task& Wakeup();
+
+    void SendMessage(const Message& msg);
+    std::optional<Message> ReceiveMessage();
 };
 
 
@@ -56,6 +62,9 @@ public:
     Error Sleep(uint64_t id);
     void Wakeup(Task* task);
     Error Wakeup(uint64_t id);
+
+    Task& CurrentTask();
+    Error SendMessage(uint64_t id, const Message& msg);
 };
 
 extern TaskManager* task_manager;

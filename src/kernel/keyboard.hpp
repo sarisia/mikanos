@@ -13,4 +13,4 @@ const int kKbdRShiftBitMask = 1u << 5;
 const int kKbdRAltBitMask = 1u << 6;
 const int kKbdRGUIBitMask = 1u << 7;
 
-void InitializeKeyboard(std::deque<Message> &msg_queue);
+void InitializeKeyboard();

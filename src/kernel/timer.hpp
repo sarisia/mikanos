@@ -27,10 +27,9 @@ class TimerManager {
 private:
     volatile unsigned long tick_{0};
     std::priority_queue<Timer> timers_{};
-    std::deque<Message> &msg_queue_;
 
 public:
-    TimerManager(std::deque<Message> &msg_queue_);
+    TimerManager();
     void AddTimer(const Timer &timer);
     bool Tick();
     unsigned long CurrentTick() const;
@@ -47,7 +46,7 @@ extern TimerManager *timer_manager;
 extern unsigned long lapic_timer_freq;
 
 // initialize Local APIC timer
-void InitializeLAPICTimer(std::deque<Message> &msg_queue);
+void InitializeLAPICTimer();
 void StartLAPICTimer();
 uint32_t LAPICTimerElapsed();
 void StopLAPICTimer();

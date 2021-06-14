@@ -68,4 +68,4 @@ constexpr InterruptDescriptorAttribute MakeIDTAttr(
 }
 
 
-void InitializeInterrupt(std::deque<Message> *msg_queue);
+void InitializeInterrupt();

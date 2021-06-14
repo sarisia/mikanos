@@ -100,6 +100,7 @@ void TaskB(uint64_t task_id, int64_t data) {
         FillRectangle(*task_b_window->Writer(), {24, 28}, {8*10, 16}, toColor(0xc6c6c6u));
         WriteString(*task_b_window->Writer(), {24, 28}, str, toColor(0));
         layer_manager->Draw(task_b_window_layer_id);
+        // __asm__("hlt"); // workaround for flicker screen
     }
 }
 
@@ -172,9 +173,6 @@ void InputTextWindow(char c) {
 }
 
 
-std::deque<Message> *main_queue;
-
-
 alignas(16) uint8_t kernel_main_stack[1024*1024];
 
 extern "C"
@@ -198,35 +196,31 @@ void KernelMainNewStack(
 
     SetLogLevel(kWarn);
 
-    ::main_queue = new std::deque<Message>(32);
-    InitializeInterrupt(main_queue);
+    InitializeInterrupt();
 
     InitializePCI();
-    usb::xhci::Initialize();
 
     InitializeLayer();
     InitializeMainWindow();
     InitializeTextWindow();
     InitializeTaskBWindow();
-    InitializeMouse();
 
     layer_manager->Draw({ {0, 0}, ScreenSize() }); // draw all
 
     acpi::Initialize(acpi_table);
-    InitializeLAPICTimer(*main_queue);
-
-    InitializeKeyboard(*main_queue);
+    InitializeLAPICTimer();
 
     // blink textbox cursor
     const int kTextboxCursorTimer = 1;
     const int kTimer05Sec = static_cast<int>(kTimerFreq*0.5);
-    __asm__("cli");
+    // __asm__("cli");
     timer_manager->AddTimer(Timer{kTimer05Sec, kTextboxCursorTimer});
-    __asm__("sti");
+    // __asm__("sti");
     bool textbox_cursor_visible = false;
 
-
     InitializeTask();
+    Task& main_task = task_manager->CurrentTask();
+
     const auto task_b_id = task_manager->NewTask()
         .InitContext(TaskB, 45)
         .Wakeup()
@@ -235,6 +229,10 @@ void KernelMainNewStack(
     task_manager->NewTask().InitContext(TaskIdle, 0xdeadbeef).Wakeup();
     task_manager->NewTask().InitContext(TaskIdle, 0xcafebabe).Wakeup();
 
+    // pci devices
+    usb::xhci::Initialize();
+    InitializeKeyboard();
+    InitializeMouse();
 
     // counter
     char str[128];
@@ -252,16 +250,16 @@ void KernelMainNewStack(
 
         __asm__("cli"); // Clear interrupt flag
 
-        if (main_queue->size() == 0) {
-            // empty, enable interrupt and halt
-            __asm__("sti\n\thlt"); // set interrupt flag
+        auto rmsg = main_task.ReceiveMessage();
+        if (!rmsg) {
+            main_task.Sleep();
+            __asm__("sti"); // set interrupt flag
             continue;
         }
 
-        auto msg = main_queue->front();
-        main_queue->pop_front();
         __asm__("sti");
 
+        auto& msg = *rmsg;
         switch (msg.type) {
         case Message::kInterruptXHCI:
             usb::xhci::ProcessEvents();

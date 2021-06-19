@@ -15,6 +15,12 @@ Build/MikanLoaderX64/DEBUG_CLANG38/X64/Loader.efi: src/MikanLoaderPkg/Main.c
 run: Build/MikanLoaderX64/DEBUG_CLANG38/X64/Loader.efi src/kernel/kernel.elf
 	${HOME}/osbook/devenv/run_qemu.sh $^
 
+.PHONY: debug
+debug: export QEMU_OPTS = -gdb tcp::12345 -S
+debug: run
+# debug: Build/MikanLoaderX64/DEBUG_CLANG38/X64/Loader.efi src/kernel/kernel.elf
+# 	${HOME}/osbook/devenv/run_qemu.sh $^
+
 .PHONY: clean
 clean:
 	make -C src/kernel clean

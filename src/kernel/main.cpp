@@ -104,14 +104,6 @@ void TaskB(uint64_t task_id, int64_t data) {
     }
 }
 
-void TaskIdle(uint64_t task_id, int64_t data) {
-    printk("TaskIdle: task_id=%lu, data=%lu\n", task_id, data);
-    while (true) {
-        __asm__("hlt");
-    }
-}
-
-
 // text box window
 
 std::shared_ptr<Window> text_window;
@@ -218,21 +210,14 @@ void KernelMainNewStack(
     // __asm__("sti");
     bool textbox_cursor_visible = false;
 
-    SetLogLevel(kDebug);
-    Log(kDebug, "InitializeTask from main\n");
     InitializeTask();
     Task& main_task = task_manager->CurrentTask();
 
-    Log(kDebug, "Initialize Task B from main\n");
     const auto task_b_id = task_manager->NewTask()
         .InitContext(TaskB, 45)
         .Wakeup()
         .ID();
-    // dummy
-    task_manager->NewTask().InitContext(TaskIdle, 0xdeadbeef).Wakeup();
-    task_manager->NewTask().InitContext(TaskIdle, 0xcafebabe).Wakeup();
 
-    SetLogLevel(kWarn);
     // pci devices
     usb::xhci::Initialize();
     InitializeKeyboard();

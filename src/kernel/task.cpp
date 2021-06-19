@@ -15,7 +15,13 @@ namespace {
         auto it = std::remove(container.begin(), container.end(), value);
         container.erase(it, container.end());
     }
-}
+
+    void taskIdle(uint64_t task_id, int64_t data) {
+        while (true) {
+            __asm__("hlt");
+        }
+    }
+} // namespace
 
 
 TaskManager *task_manager;
@@ -112,13 +118,18 @@ std::optional<Message> Task::ReceiveMessage() {
 TaskManager::TaskManager() {
     // spawn task for the caller of TaskManager constructor (main task)
     // and will be initialized when SwitchContext happens
-    Log(kDebug, "TaskManager Initialize...");
     // using auto and you'll die.
     Task& task = NewTask()
         .setLevel(current_level_)
         .setRunning(true);
     running_[current_level_].push_back(&task);
-    Log(kDebug, "done.\n");
+
+    // add idle task that won't go sleep forever
+    Task& idle = NewTask()
+        .InitContext(taskIdle, 0)
+        .setLevel(0)
+        .setRunning(true);
+    running_[0].push_back(&idle);
 }
 
 Task &TaskManager::NewTask() {

@@ -29,6 +29,7 @@ public:
     static const int kDefaultLevel = 1;
     
     Task(uint64_t id);
+    Task(const Task &obj) = delete;
     Task& InitContext(TaskFunc *f, int64_t data);
 
     TaskContext &Context();

@@ -5,6 +5,7 @@
 
 #include "graphics.hpp"
 #include "window.hpp"
+#include "message.hpp"
 
 class Layer {
 private:
@@ -76,3 +77,4 @@ public:
 extern LayerManager *layer_manager;
 
 void InitializeLayer();
+void ProcessLayerMessage(const Message &msg);

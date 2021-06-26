@@ -30,7 +30,6 @@ public:
     Layer &Move(Vector2D<int> pos);
     Layer &MoveRelative(Vector2D<int> pos_diff);
     // DrawTo draws the current window to the given writer
-    void DrawTo(FrameBuffer &screen) const;
     void DrawTo(FrameBuffer &screen, const Rectangle<int> &area);
 
     Vector2D<int> GetPosition() const;
@@ -50,7 +49,7 @@ private:
     // for generating unique id
     unsigned int latest_id_{0};
 
-    Layer *findLayer(unsigned int id);
+    void dumpLayerStack() const;
 
 public:
     void SetWriter(FrameBuffer *screen);
@@ -70,11 +69,31 @@ public:
     void UpDown(unsigned int id, int new_height);
     void Hide(unsigned int id);
 
+    int GetHeight(unsigned int id);
+
+    Layer* FindLayer(unsigned int id);
     Layer *FindLayerByPosition(Vector2D<int> pos, unsigned int exclude_id) const;
+};
+
+
+class ActiveLayer {
+public:
+    ActiveLayer(LayerManager &manager);
+
+    void SetMouseLayer(unsigned int mouse_layer);
+    // Activate make layer topmost, then change color of titlebars
+    void Activate(unsigned int layer_id);
+    unsigned int GetActive() const;
+
+private:
+    LayerManager &manager_;
+    unsigned int mouse_layer_{0};
+    unsigned int active_layer_{0};
 };
 
 // global LayerManager
 extern LayerManager *layer_manager;
+extern ActiveLayer *active_layer;
 
 void InitializeLayer();
 void ProcessLayerMessage(const Message &msg);

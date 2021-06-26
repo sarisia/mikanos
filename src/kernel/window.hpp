@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <optional>
+#include <string>
 
 #include "graphics.hpp"
 #include "frame_buffer.hpp"
@@ -36,14 +37,13 @@ public:
     };
 
     Window(int width, int height, PixelFormat shadow_format);
-    ~Window() = default;
+    virtual ~Window() = default;
 
     // prohibit copy
     Window(const Window& rhs) = delete;
     Window &operator =(const Window& rhs) = delete;
 
     // DrawTo draws this window to the given PixelWriter
-    void DrawTo(FrameBuffer &dst, Vector2D<int> position);
     void DrawTo(FrameBuffer &dst, Vector2D<int> pos, const Rectangle<int> &area);
     // SetTransparentColor sets transparent color
     void SetTransparentColor(std::optional<PixelColor> c);
@@ -60,6 +60,8 @@ public:
     int Height() const;
     Vector2D<int> Size() const;
 
+    virtual void Activate() {};
+    virtual void Deactivate() {};
 
 private:
     int width_, height_;
@@ -70,5 +72,47 @@ private:
 };
 
 
+class ToplevelWindow: public Window {
+public:
+    static constexpr Vector2D<int> kTopLeftMargin{4, 24};
+    static constexpr Vector2D<int> kBottomRightMargin{4, 4};
+
+    class InnerAreaWriter: public PixelWriter {
+    public:
+        InnerAreaWriter(ToplevelWindow &window): window_{window} {}
+
+        virtual void Write(Vector2D<int> pos, const PixelColor &color) override {
+            window_.Write(pos+kTopLeftMargin, color);
+        }
+
+        virtual int Width() const override {
+            return window_.Width() - kTopLeftMargin.x - kBottomRightMargin.x;
+        }
+
+        virtual int Height() const override {
+            return window_.Height() - kTopLeftMargin.y - kBottomRightMargin.y;
+        }
+
+    private:
+        ToplevelWindow& window_;
+    };
+
+    ToplevelWindow(int width, int height, PixelFormat shadow_format, const std::string &title);
+
+    virtual void Activate() override;
+    virtual void Deactivate() override;
+
+    InnerAreaWriter *InnerWriter() {
+        return &inner_writer_;
+    }
+    Vector2D<int> InnerSize() const;
+
+private:
+    std::string title_;
+    InnerAreaWriter inner_writer_{*this};
+};
+
+
 void DrawWindow(PixelWriter &writer, const char *title);
 void DrawTextbox(PixelWriter &writer, Vector2D<int> pos, Vector2D<int> size);
+void DrawWindowTitle(PixelWriter &writer, const char *title, bool active);

@@ -75,8 +75,10 @@ inline bool operator !=(const PixelColor &lhs, const PixelColor &rhs) {
 class PixelWriter {
 public:
     virtual ~PixelWriter() = default;
-    virtual void Write(int x, int y, const PixelColor& c) = 0;
     virtual void Write(Vector2D<int> pos, const PixelColor &color) = 0;
+    virtual void Write(int x, int y, const PixelColor& c) {
+        return Write({x, y}, c);
+    }
     virtual int Width() const = 0;
     virtual int Height() const = 0;
 };

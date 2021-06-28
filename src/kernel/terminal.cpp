@@ -23,9 +23,14 @@ unsigned int Terminal::LayerID() const {
     return layer_id_;
 }
 
-void Terminal::BlinkCursor() {
+Rectangle<int> Terminal::BlinkCursor() {
     cursor_visible_ = !cursor_visible_;
     drawCursor(cursor_visible_);
+
+    return {
+        ToplevelWindow::kTopLeftMargin + Vector2D<int>{4 + 8*cursor_.x, 5 + 16*cursor_.y}, // pos
+        {7, 15} // size
+    };
 }
 
 void Terminal::drawCursor(bool visible) {
@@ -55,13 +60,13 @@ void TerminalTask(uint64_t task_id, int64_t data) {
 
         switch (msg->type) {
         case Message::kTimerTimeout:
-            terminal->BlinkCursor();
-
-            // send draw command
             {
-                Message msg{Message::kLayer, task_id};
-                msg.arg.layer.layer_id = terminal->LayerID();
-                msg.arg.layer.op = LayerOperation::Draw;
+                const auto area = terminal->BlinkCursor();
+
+                // send draw command
+                Message msg = MakeLayerMessage(
+                    task_id, terminal->LayerID(), LayerOperation::DrawArea, area
+                );
                 __asm__("cli");
                 task_manager->SendMessage(1, msg);
                 __asm__("sti");

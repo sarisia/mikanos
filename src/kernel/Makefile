@@ -22,6 +22,7 @@ OBJS= \
 	acpi.o \
 	keyboard.o \
 	task.o \
+	terminal.o \
 	usb/memory.o \
 	usb/device.o \
 	usb/classdriver/base.o \

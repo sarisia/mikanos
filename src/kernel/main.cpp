@@ -24,6 +24,7 @@
 #include "acpi.hpp"
 #include "keyboard.hpp"
 #include "task.hpp"
+#include "terminal.hpp"
 
 #include "usb/device.hpp"
 #include "usb/memory.hpp"
@@ -241,6 +242,11 @@ void KernelMainNewStack(
         .Wakeup()
         .ID();
 
+    const auto task_terminal_id = task_manager->NewTask()
+        .InitContext(TerminalTask, 0)
+        .Wakeup()
+        .ID();
+
     // pci devices
     usb::xhci::Initialize();
     InitializeKeyboard();
@@ -284,9 +290,14 @@ void KernelMainNewStack(
                 __asm__("cli");
                 timer_manager->AddTimer(Timer{msg.arg.timer.timeout + kTimer05Sec, kTextboxCursorTimer});
                 __asm__("sti");
+
                 textbox_cursor_visible = !textbox_cursor_visible;
                 DrawTextCursor(textbox_cursor_visible);
                 layer_manager->Draw(text_window_layer_id);
+
+                __asm__("cli");
+                task_manager->SendMessage(task_terminal_id, msg);
+                __asm__("sti");
             }
             break;
         case Message::kKeyPush:

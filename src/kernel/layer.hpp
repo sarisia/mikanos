@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <algorithm>
+#include <map>
 
 #include "graphics.hpp"
 #include "window.hpp"
@@ -95,6 +96,7 @@ private:
 // global LayerManager
 extern LayerManager *layer_manager;
 extern ActiveLayer *active_layer;
+extern std::map<unsigned int, uint64_t> *layer_task_map;
 
 void InitializeLayer();
 void ProcessLayerMessage(const Message &msg);

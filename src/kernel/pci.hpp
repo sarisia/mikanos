@@ -138,7 +138,7 @@ Error ConfigureMSIFixedDestination(
     unsigned int num_vector_exponent
 );
 
-}
+} // namespace pci
 
 
 void InitializePCI();

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <deque>
 
 #include "window.hpp"
 #include "graphics.hpp"
@@ -24,6 +25,9 @@ private:
 
     int linebuf_index_{0};
     std::array<char, kLineMax> linebuf_{};
+
+    std::deque<std::array<char, kLineMax>> cmd_history_{};
+    int cmd_history_index_{-1};
     
     void drawCursor(bool visible);
     Vector2D<int> calcCursorPos() const;
@@ -31,6 +35,7 @@ private:
     void scroll1();
     void print(const char *s);
     void executeLine();
+    Rectangle<int> historyUpDown(int direction);
 };
 
 void TerminalTask(uint64_t task_id, int64_t data);

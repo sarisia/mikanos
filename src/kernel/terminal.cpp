@@ -7,6 +7,7 @@
 #include "window.hpp"
 #include "logger.hpp"
 #include "font.hpp"
+#include "pci.hpp"
 
 Terminal::Terminal() {
     window_ = std::make_shared<ToplevelWindow>(
@@ -23,6 +24,7 @@ Terminal::Terminal() {
         .ID();
 
     print("> ");
+    cmd_history_.resize(8);
 }
 
 unsigned int Terminal::LayerID() const {
@@ -47,7 +49,14 @@ Rectangle<int> Terminal::InputKey(uint8_t modifier, uint8_t keycode, char ascii)
     if (ascii == '\n') {
         // line break
         linebuf_[linebuf_index_] = 0; // null char terminate
+        // save command history
+        if (linebuf_index_ > 0) {
+            cmd_history_.pop_back();
+            cmd_history_.push_front(linebuf_);
+        }
+        
         linebuf_index_ = 0;
+        cmd_history_index_ = -1;
         cursor_.x = 0;
 
         // Log(kWarn, "line: %s\n", &linebuf_[0]);
@@ -82,6 +91,11 @@ Rectangle<int> Terminal::InputKey(uint8_t modifier, uint8_t keycode, char ascii)
             WriteAscii(*window_->Writer(), calcCursorPos(), ascii, toColor(0xffffff));
             ++cursor_.x;
         }
+    } else if (keycode == 0x51) {
+        // down arrow
+        draw_area = historyUpDown(-1);
+    } else if (keycode == 0x52) {
+        draw_area = historyUpDown(1);
     }
 
     drawCursor(true);
@@ -153,11 +167,51 @@ void Terminal::executeLine() {
     } else if (strcmp(command, "clear") == 0) {
         FillRectangle(*window_->InnerWriter(), {4, 4}, {8*kColumns, 16*kRows}, toColor(0));
         cursor_.y = 0;
+    } else if (strcmp(command, "lspci") == 0) {
+        char s[64];
+        for (int i = 0 ; i < pci::num_device; ++i) {
+            const auto &dev = pci::devices[i];
+            auto vendor_id = pci::ReadVendorID(dev);
+            sprintf(s, "%02x:%02x.%d vendor %04x head %02x class %02x.%02x.%02x\n", 
+                dev.bus, dev.device, dev.function, vendor_id, dev.header_type,
+                dev.class_code.base, dev.class_code.sub, dev.class_code.interface);
+            print(s);
+        }
     } else if (command[0] != 0) {
         print("no such command: ");
         print(command);
         print("\n");
     }
+}
+
+Rectangle<int> Terminal::historyUpDown(int direction) {
+    if (direction == -1 && cmd_history_index_ >= 0) {
+        // down arrow
+        --cmd_history_index_;
+    } else if (direction == 1 && cmd_history_index_ + 1 < cmd_history_.size()) {
+        // up arrow
+        ++cmd_history_index_;
+    }
+
+    cursor_.x = 2;
+    const auto first_pos = calcCursorPos();
+
+    // erase current
+    Rectangle<int> draw_area{first_pos, {8*(kColumns-2), 16}};
+    FillRectangle(*window_->Writer(), draw_area.pos, draw_area.size, toColor(0));
+
+    const char *history = "";
+    if (cmd_history_index_ >= 0) {
+        history = &cmd_history_[cmd_history_index_][0];
+    }
+
+    strcpy(&linebuf_[0], history);
+    linebuf_index_ = strlen(history);
+
+    WriteString(*window_->Writer(), first_pos, history, toColor(0xffffff));
+    cursor_.x = linebuf_index_ + 2;
+
+    return draw_area;
 }
 
 

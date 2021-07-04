@@ -29,6 +29,8 @@ private:
     Vector2D<int> calcCursorPos() const;
 
     void scroll1();
+    void print(const char *s);
+    void executeLine();
 };
 
 void TerminalTask(uint64_t task_id, int64_t data);

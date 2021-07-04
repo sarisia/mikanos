@@ -157,7 +157,7 @@ void LayerManager::UpDown(unsigned int id, int new_height) {
     // layer is not in layer_stack_ (hidden) -> just insert it
     if (old_pos == layer_stack_.end()) {
         layer_stack_.insert(new_pos, layer);
-        dumpLayerStack(); // DEBUG
+        // dumpLayerStack(); // DEBUG
         return;
     }
 
@@ -169,7 +169,7 @@ void LayerManager::UpDown(unsigned int id, int new_height) {
     layer_stack_.erase(old_pos);
     layer_stack_.insert(new_pos, layer);
 
-    dumpLayerStack(); // DEBUG
+    // dumpLayerStack(); // DEBUG
 }
 
 void LayerManager::Hide(unsigned int id) {

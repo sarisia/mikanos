@@ -1,5 +1,7 @@
 #include "terminal.hpp"
 
+#include <cstring>
+
 #include "layer.hpp"
 #include "task.hpp"
 #include "window.hpp"
@@ -19,6 +21,8 @@ Terminal::Terminal() {
         .SetWindow(window_)
         .SetDraggable(true)
         .ID();
+
+    print("> ");
 }
 
 unsigned int Terminal::LayerID() const {
@@ -42,17 +46,20 @@ Rectangle<int> Terminal::InputKey(uint8_t modifier, uint8_t keycode, char ascii)
 
     if (ascii == '\n') {
         // line break
-        linebuf_[linebuf_index_] = 0;
+        linebuf_[linebuf_index_] = 0; // null char terminate
         linebuf_index_ = 0;
         cursor_.x = 0;
 
-        Log(kWarn, "line: %s\n", &linebuf_[0]);
+        // Log(kWarn, "line: %s\n", &linebuf_[0]);
 
         if (cursor_.y < kRows-1) {
             ++cursor_.y;
         } else {
             scroll1();
         }
+
+        executeLine();
+        print("> ");
         
         draw_area.pos = ToplevelWindow::kTopLeftMargin;
         draw_area.size = window_->InnerSize();
@@ -98,6 +105,56 @@ void Terminal::scroll1() {
     };
     window_->Move(ToplevelWindow::kTopLeftMargin + Vector2D<int>{4, 4}, move_src);
     FillRectangle(*window_->InnerWriter(), {4, 4+16*cursor_.y}, {8*kColumns, 16}, toColor(0));
+}
+
+void Terminal::print(const char *s) {
+    drawCursor(false);
+
+    auto newline = [this]() {
+        cursor_.x = 0;
+        if (cursor_.y < kRows-1) {
+            ++cursor_.y;
+        } else {
+            scroll1();
+        }
+    };
+
+    while (*s) {
+        if (*s == '\n') {
+            newline();
+        } else {
+            WriteAscii(*window_->Writer(), calcCursorPos(), *s, toColor(0xffffff));
+            if (cursor_.x == kColumns-1) {
+                newline();
+            } else {
+                ++cursor_.x;
+            }
+        }
+
+        ++s;
+    }
+
+    drawCursor(true);
+}
+
+void Terminal::executeLine() {
+    char *command = &linebuf_[0];
+    char *first_arg = strchr(&linebuf_[0], ' ');
+    if (first_arg) {
+        *first_arg = 0;
+        ++first_arg;
+    }
+
+    if (strcmp(command, "echo") == 0) {
+        if (first_arg) {
+            print(first_arg);
+        }
+        print("\n");
+    } else if (command[0] != 0) {
+        print("no such command: ");
+        print(command);
+        print("\n");
+    }
 }
 
 

@@ -72,62 +72,6 @@ void InitializeMainWindow() {
 }
 
 
-// task b window
-
-std::shared_ptr<ToplevelWindow> task_b_window;
-unsigned int task_b_window_layer_id;
-
-void InitializeTaskBWindow() {
-    task_b_window = std::make_shared<ToplevelWindow>(160, 52, screen_config.pixel_format, "TaskB window");
-
-    task_b_window_layer_id = layer_manager->NewLayer()
-        .SetWindow(task_b_window)
-        .SetDraggable(true)
-        .Move({400, 400})
-        .ID();
-
-    layer_manager->UpDown(task_b_window_layer_id, std::numeric_limits<int>::max());
-}
-
-void TaskB(uint64_t task_id, int64_t data) {
-    printk("TaskB: task_id=%lu, data=%lu\n", task_id, data);
-    char str[128];
-    int count = 0;
-
-    __asm__("cli");
-    Task &task = task_manager->CurrentTask();
-    __asm__("sti");
-
-    while (true) {
-        ++count;
-        sprintf(str, "%010d", count);
-        FillRectangle(*task_b_window->InnerWriter(), {20, 4}, {8*10, 16}, toColor(0xc6c6c6u));
-        WriteString(*task_b_window->InnerWriter(), {20, 4}, str, toColor(0));
-
-        Message msg{Message::kLayer, task_id};
-        msg.arg.layer.layer_id = task_b_window_layer_id;
-        msg.arg.layer.op = LayerOperation::Draw;
-
-        __asm__("cli");
-        task_manager->SendMessage(1, msg);
-        __asm__("sti");
-
-        while (true) {
-            __asm__("cli");
-            auto msg = task.ReceiveMessage();
-            if (!msg) {
-                task.Sleep();
-                __asm__("sti");
-                continue;
-            }
-
-            if (msg->type == Message::kLayerFinish) {
-                break;
-            }
-        }
-    }
-}
-
 // text box window
 
 std::shared_ptr<ToplevelWindow> text_window;
@@ -219,7 +163,6 @@ void KernelMainNewStack(
     InitializeLayer();
     InitializeMainWindow();
     InitializeTextWindow();
-    InitializeTaskBWindow();
 
     layer_manager->Draw({ {0, 0}, ScreenSize() }); // draw all
 
@@ -237,11 +180,6 @@ void KernelMainNewStack(
     InitializeTask();
     Task& main_task = task_manager->CurrentTask();
 
-    const auto task_b_id = task_manager->NewTask()
-        .InitContext(TaskB, 45)
-        .Wakeup()
-        .ID();
-
     const auto task_terminal_id = task_manager->NewTask()
         .InitContext(TerminalTask, 0)
         .Wakeup()
@@ -251,9 +189,6 @@ void KernelMainNewStack(
     usb::xhci::Initialize();
     InitializeKeyboard();
     InitializeMouse();
-
-    // default active window
-    active_layer->Activate(task_b_window_layer_id);
 
     // counter
     char str[128];
@@ -303,15 +238,6 @@ void KernelMainNewStack(
         case Message::kKeyPush:
             if (auto act = active_layer->GetActive(); act == text_window_layer_id) {
                 InputTextWindow(msg.arg.keyboard.ascii);
-            } else if (act == task_b_window_layer_id) {
-                if ((msg.arg.keyboard.modifier & (kKbdLControlBitMask | kKbdRControlBitMask)) != 0) {
-                    if (msg.arg.keyboard.ascii == 's') { // Ctrl+S
-                        printk("sleep TaskB: %s\n", task_manager->Sleep(task_b_id).Name());
-                    }
-                    else if (msg.arg.keyboard.ascii == 'w') { // Ctrl+W
-                        printk("wakeup TaskB: %s\n", task_manager->Wakeup(task_b_id).Name());
-                    }
-                }
             } else {
                 // send key event to the task of active layer (window)
                 __asm__("cli");

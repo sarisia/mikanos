@@ -23,6 +23,7 @@ OBJS= \
 	keyboard.o \
 	task.o \
 	terminal.o \
+	fat.o \
 	usb/memory.o \
 	usb/device.o \
 	usb/classdriver/base.o \

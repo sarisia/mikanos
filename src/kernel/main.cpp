@@ -25,6 +25,7 @@
 #include "keyboard.hpp"
 #include "task.hpp"
 #include "terminal.hpp"
+#include "fat.hpp"
 
 #include "usb/device.hpp"
 #include "usb/memory.hpp"
@@ -159,6 +160,7 @@ void KernelMainNewStack(
 
     InitializeInterrupt();
 
+    fat::Initialize(volume_image);
     InitializePCI();
 
     InitializeLayer();
@@ -192,22 +194,22 @@ void KernelMainNewStack(
     InitializeMouse();
 
     // dump 256B from head of the volume_image
-    uint8_t *p = reinterpret_cast<uint8_t *>(volume_image);
-    printk("dump volume image: \n");
-    for (int i = 0; i < 16; ++i) {
-        printk("%04x:", i*16); // header
-        for (int j = 0; j < 8; ++j) {
-            printk(" %02x", *p++);
-        }
+    // uint8_t *p = reinterpret_cast<uint8_t *>(volume_image);
+    // printk("dump volume image: \n");
+    // for (int i = 0; i < 16; ++i) {
+    //     printk("%04x:", i*16); // header
+    //     for (int j = 0; j < 8; ++j) {
+    //         printk(" %02x", *p++);
+    //     }
 
-        // space
-        printk(" ");
-        for (int j = 0; j < 8; ++j) {
-            printk(" %02x", *p++);
-        }
+    //     // space
+    //     printk(" ");
+    //     for (int j = 0; j < 8; ++j) {
+    //         printk(" %02x", *p++);
+    //     }
 
-        printk("\n");
-    }
+    //     printk("\n");
+    // }
 
     // mainloop!
 

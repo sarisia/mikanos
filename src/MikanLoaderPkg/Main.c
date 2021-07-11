@@ -6,6 +6,7 @@
 #include <Library/BaseMemoryLib.h>
 #include <Protocol/SimpleFileSystem.h>
 #include <Protocol/LoadedImage.h>
+#include <Protocol/BlockIo.h>
 #include <Guid/FileInfo.h>
 
 #include "frame_buffer_config.hpp"
@@ -204,6 +205,99 @@ EFI_STATUS OpenGOP(EFI_HANDLE image_handle, EFI_GRAPHICS_OUTPUT_PROTOCOL **gop) 
     return EFI_SUCCESS;
 }
 
+EFI_STATUS ReadFile(EFI_FILE_PROTOCOL *file, VOID **buffer) {
+    EFI_STATUS status;
+    UINTN file_info_size = sizeof(EFI_FILE_INFO) + sizeof(CHAR16) * 12;
+    UINT8 file_info_buf[file_info_size];
+    status = file->GetInfo(
+        file,
+        &gEfiFileInfoGuid,
+        &file_info_size, // in out
+        file_info_buf // out
+    );
+    if (EFI_ERROR(status)) {
+        return status;
+    }
+
+    EFI_FILE_INFO* file_info = (EFI_FILE_INFO*)file_info_buf;
+    UINTN kernel_file_size = file_info->FileSize;
+
+    // 1. load kernel to temp buffer
+    // VOID* kernel_buffer;
+    status = gBS->AllocatePool(
+        EfiLoaderData,
+        kernel_file_size,
+        buffer
+    );
+    if (EFI_ERROR(status)) {
+        return status;
+    }
+
+    status = file->Read(
+        file,
+        &kernel_file_size, // in out
+        *buffer // out
+    );
+
+    return status;
+}
+
+EFI_STATUS OpenBlockIoProtocolForLoadedImage(EFI_HANDLE image_handle, EFI_BLOCK_IO_PROTOCOL **block_io) {
+    EFI_STATUS status;
+    EFI_LOADED_IMAGE_PROTOCOL *loaded_image;
+
+    status = gBS->OpenProtocol(
+        image_handle,
+        &gEfiLoadedImageProtocolGuid,
+        (VOID **)&loaded_image,
+        image_handle,
+        NULL,
+        EFI_OPEN_PROTOCOL_BY_HANDLE_PROTOCOL
+    );
+    if (EFI_ERROR(status)) {
+        return status;
+    }
+
+    status = gBS->OpenProtocol(
+        loaded_image->DeviceHandle,
+        &gEfiBlockIoProtocolGuid,
+        (VOID **)block_io,
+        image_handle,
+        NULL,
+        EFI_OPEN_PROTOCOL_BY_HANDLE_PROTOCOL
+    );
+
+    return status;
+}
+
+EFI_STATUS ReadBlocks(
+    EFI_BLOCK_IO_PROTOCOL *block_io,
+    UINT32 media_id,
+    UINTN read_bytes,
+    VOID **buffer
+) {
+    EFI_STATUS status;
+
+    status = gBS->AllocatePool(
+        EfiLoaderData,
+        read_bytes,
+        buffer
+    );
+    if (EFI_ERROR(status)) {
+        return status;
+    }
+
+    status = block_io->ReadBlocks(
+        block_io,
+        media_id,
+        0,
+        read_bytes,
+        *buffer
+    );
+
+    return status;
+}
+
 EFI_STATUS EFIAPI UefiMain(
     EFI_HANDLE image_handle,
     EFI_SYSTEM_TABLE *system_table
@@ -295,44 +389,13 @@ EFI_STATUS EFIAPI UefiMain(
         Halt();
     }
 
-    UINTN file_info_size = sizeof(EFI_FILE_INFO) + sizeof(CHAR16)*12;
-    UINT8 file_info_buf[file_info_size];
-    status = kernel_file->GetInfo(
-        kernel_file,
-        &gEfiFileInfoGuid,
-        &file_info_size, // in out
-        file_info_buf // out
-    );
-    if (EFI_ERROR(status)) {
-        Print(L"Failed to get file information: %r\n", status);
-        Halt();
-    }
-
-    EFI_FILE_INFO *file_info = (EFI_FILE_INFO *)file_info_buf;
-    UINTN kernel_file_size = file_info->FileSize;
-
-    // 1. load kernel to temp buffer
     VOID *kernel_buffer;
-    status = gBS->AllocatePool(
-        EfiLoaderData,
-        kernel_file_size,
-        &kernel_buffer
-    );
-    if (EFI_ERROR(status)) {
-        Print(L"Failed to allocate pool: %r\n", status);
-        Halt();
-    }
-
-    status = kernel_file->Read(
-        kernel_file,
-        &kernel_file_size, // in out
-        kernel_buffer // out
-    );
+    status = ReadFile(kernel_file, &kernel_buffer);
     if (EFI_ERROR(status)) {
         Print(L"File read error ('\\kernel.elf'): %r\n", status);
         Halt();
     }
-    Print(L"Kernel buffer: 0x%0lx (%lu bytes)\n", kernel_buffer, kernel_file_size);
+    // Print(L"Kernel buffer: 0x%0lx (%lu bytes)\n", kernel_buffer, kernel_file_size);
 
     // 2. read kernel ELF header, calculate destination addr
     Elf64_Ehdr *kernel_ehdr = (Elf64_Ehdr *)kernel_buffer;
@@ -360,6 +423,51 @@ EFI_STATUS EFIAPI UefiMain(
     if (EFI_ERROR(status)) {
         Print(L"Failed to free pool: %r\n", status);
         Halt();
+    }
+    // kernel loaded
+
+    // load volume filesystem
+    VOID *volume_image;
+
+    EFI_FILE_PROTOCOL *volume_file;
+    status = root_dir->Open(
+        root_dir,
+        &volume_file,
+        L"\\fat_disk",
+        EFI_FILE_MODE_READ,
+        0
+    );
+    if (status == EFI_SUCCESS) {
+        // if there's fat_disk file, use them as volume image
+        status = ReadFile(volume_file, &volume_image);
+        if (EFI_ERROR(status)) {
+            Print(L"Failed to read volume file: %r\n", status);
+            Halt();
+        }
+    } else {
+        // if fat_disk file is missing, read head 16MB with block io protocol
+        EFI_BLOCK_IO_PROTOCOL *block_io;
+        status = OpenBlockIoProtocolForLoadedImage(image_handle, &block_io);
+        if (EFI_ERROR(status)) {
+            Print(L"Failed to open Block I/O Protocol: %r\n", status);
+            Halt();
+        }
+
+        // do something with block io
+        EFI_BLOCK_IO_MEDIA *media = block_io->Media;
+        UINTN volume_bytes = (UINTN)media->BlockSize * (media->LastBlock+1);
+        if (volume_bytes > 16 * 1024 * 1024) {
+            volume_bytes = 16 * 1024 * 1024;
+        }
+
+        Print(L"Reading %lu bytes (present %d, blocksize %u, lastblock %u\n",
+            volume_bytes, media->MediaPresent, media->BlockSize, media->LastBlock);
+        
+        status = ReadBlocks(block_io, media->MediaId, volume_bytes, &volume_image);
+        if (EFI_ERROR(status)) {
+            Print(L"Failed to read blocks: %r\n", status);
+            Halt();
+        }
     }
 
     // want to print kernel entry point, so find it here
@@ -417,9 +525,10 @@ EFI_STATUS EFIAPI UefiMain(
     typedef void (*EntryPointType)(
         const struct FrameBufferConfig*,
         const struct MemoryMap*,
-        const VOID *);
+        const VOID *,
+        VOID *);
     EntryPointType entry_point = (EntryPointType)entry_addr;
-    (*entry_point)(&config, &memmap, acpi_table);
+    (*entry_point)(&config, &memmap, acpi_table, volume_image);
 
     Print(L"All done...?\n");
     return EFI_SUCCESS;

@@ -139,7 +139,8 @@ extern "C"
 void KernelMainNewStack(
     const struct FrameBufferConfig& frame_buffer_config_ref,
     const struct MemoryMap& memory_map_ref,
-    const acpi::RSDP &acpi_table // root system descriptor pointer
+    const acpi::RSDP &acpi_table, // root system descriptor pointer
+    void *volume_image
 ) {
     // FrameBufferConfig frame_buffer_config{frame_buffer_config_ref};
     MemoryMap memory_map{memory_map_ref};
@@ -189,6 +190,26 @@ void KernelMainNewStack(
     usb::xhci::Initialize();
     InitializeKeyboard();
     InitializeMouse();
+
+    // dump 256B from head of the volume_image
+    uint8_t *p = reinterpret_cast<uint8_t *>(volume_image);
+    printk("dump volume image: \n");
+    for (int i = 0; i < 16; ++i) {
+        printk("%04x:", i*16); // header
+        for (int j = 0; j < 8; ++j) {
+            printk(" %02x", *p++);
+        }
+
+        // space
+        printk(" ");
+        for (int j = 0; j < 8; ++j) {
+            printk(" %02x", *p++);
+        }
+
+        printk("\n");
+    }
+
+    // mainloop!
 
     // counter
     char str[128];

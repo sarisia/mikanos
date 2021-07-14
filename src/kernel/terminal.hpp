@@ -34,6 +34,7 @@ private:
 
     void scroll1();
     void print(const char *s);
+    void print(char s);
     void executeLine();
     Rectangle<int> historyUpDown(int direction);
 };

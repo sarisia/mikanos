@@ -4,6 +4,8 @@
 
 namespace fat {
 
+static const unsigned long kEndOfClusterChain = 0x0ffffffflu;
+
 // BIOS Parameter Block
 struct BPB {
     uint8_t jump_boot[3];
@@ -66,6 +68,7 @@ struct DirectoryEntry {
 } __attribute__((packed));
 
 extern BPB *boot_volume_image;
+extern unsigned long bytes_per_cluster;
 
 void Initialize(void *volume_image);
 uintptr_t GetClusterAddr(unsigned long cluster);
@@ -76,5 +79,8 @@ T *GetSectorByCluster(unsigned long cluster) {
 }
 
 void ReadName(const DirectoryEntry &entry, char *base, char *ext);
+unsigned long NextCluster(unsigned long cluster);
+DirectoryEntry *FindFile(const char *name, unsigned long dir_cluster=0);
+bool NameIsEqual(const DirectoryEntry &entry, const char *name);
 
 } // namespace fat

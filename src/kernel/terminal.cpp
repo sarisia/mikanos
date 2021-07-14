@@ -126,38 +126,43 @@ void Terminal::scroll1() {
 void Terminal::print(const char *s) {
     drawCursor(false);
 
-    auto newline = [this]() {
-        cursor_.x = 0;
-        if (cursor_.y < kRows-1) {
-            ++cursor_.y;
-        } else {
-            scroll1();
-        }
-    };
-
     while (*s) {
-        if (*s == '\n') {
-            newline();
-        } else {
-            WriteAscii(*window_->Writer(), calcCursorPos(), *s, toColor(0xffffff));
-            if (cursor_.x == kColumns-1) {
-                newline();
-            } else {
-                ++cursor_.x;
-            }
-        }
-
+        print(*s);
         ++s;
     }
 
     drawCursor(true);
 }
 
+void Terminal::print(char s) {
+    auto newline = [this]() {
+        cursor_.x = 0;
+        if (cursor_.y < kRows - 1) {
+            ++cursor_.y;
+        }
+        else {
+            scroll1();
+        }
+    };
+
+    if (s == '\n') {
+        newline();
+    } else {
+        WriteAscii(*window_->Writer(), calcCursorPos(), s, toColor(0xffffff));
+        if (cursor_.x == kColumns - 1) {
+            newline();
+        }
+        else {
+            ++cursor_.x;
+        }
+    }
+}
+
 void Terminal::executeLine() {
     char *command = &linebuf_[0];
-    char *first_arg = strchr(&linebuf_[0], ' ');
+    char *first_arg = strchr(&linebuf_[0], ' '); // find char from string, return nullptr if missing
     if (first_arg) {
-        *first_arg = 0;
+        *first_arg = 0; // null termination
         ++first_arg;
     }
 
@@ -183,8 +188,7 @@ void Terminal::executeLine() {
         auto root_dir_entries = fat::GetSectorByCluster<fat::DirectoryEntry>(
             fat::boot_volume_image->root_cluster
         );
-        auto entries_per_cluster = fat::boot_volume_image->bytes_per_sector / sizeof(fat::DirectoryEntry) *
-            fat::boot_volume_image->sectors_per_cluster;
+        auto entries_per_cluster = fat::bytes_per_cluster / sizeof(fat::DirectoryEntry);
         char base[9], ext[4];
         char s[64];
 
@@ -207,6 +211,34 @@ void Terminal::executeLine() {
             }
 
             print(s);
+        }
+    } else if (strcmp(command, "cat") == 0) {
+        char s[64];
+        Log(kWarn, "start cat\n");
+
+        auto file_entry = fat::FindFile(first_arg);
+        Log(kWarn, "file_entry %p\n", file_entry);
+        if (!file_entry) {
+            sprintf(s, "no such file: %s\n", first_arg);
+            print(s); // print entire string
+        } else {
+            // found file, read it!
+            auto cluster = file_entry->FirstCluster();
+            auto remain_bytes = file_entry->file_size;
+
+            drawCursor(false);
+            while (cluster != 0 && cluster != fat::kEndOfClusterChain) {
+                char *p = fat::GetSectorByCluster<char>(cluster);
+                int i = 0;
+                for (; i < fat::bytes_per_cluster && i < remain_bytes; ++i) {
+                    print(*p); // print only this char
+                    ++p;
+                }
+                remain_bytes -= i;
+                cluster = fat::NextCluster(cluster);
+            }
+
+            drawCursor(true);
         }
     } else if (command[0] != 0) {
         print("no such command: ");

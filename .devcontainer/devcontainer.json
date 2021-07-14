@@ -41,6 +41,7 @@
 	"remoteUser": "vscode",
 
 	"runArgs": [
-		"--privileged"
+		"--privileged",
+		"--disable-content-trust=true"
 	]
 }

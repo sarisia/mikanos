@@ -5,6 +5,7 @@
 
 #include "window.hpp"
 #include "graphics.hpp"
+#include "fat.hpp"
 
 class Terminal {
 public:
@@ -36,6 +37,7 @@ private:
     void print(const char *s);
     void print(char s);
     void executeLine();
+    void executeFile(const fat::DirectoryEntry &file_entry);
     Rectangle<int> historyUpDown(int direction);
 };
 

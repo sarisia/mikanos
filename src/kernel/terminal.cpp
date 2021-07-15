@@ -241,10 +241,37 @@ void Terminal::executeLine() {
             drawCursor(true);
         }
     } else if (command[0] != 0) {
-        print("no such command: ");
-        print(command);
-        print("\n");
+        auto file_entry = fat::FindFile(command);
+        if (!file_entry) {
+            print("no such command: ");
+            print(command);
+            print("\n");
+        } else {
+            executeFile(*file_entry);
+        }
     }
+}
+
+void Terminal::executeFile(const fat::DirectoryEntry &file_entry) {
+    auto cluster = file_entry.FirstCluster();
+    auto remain_bytes = file_entry.file_size;
+
+    std::vector<uint8_t> file_buf(remain_bytes);
+    auto p = &file_buf[0];
+
+    while (cluster != 0 && cluster != fat::kEndOfClusterChain) {
+        const auto copy_bytes = fat::bytes_per_cluster < remain_bytes ?
+            fat::bytes_per_cluster : remain_bytes;
+        memcpy(p, fat::GetSectorByCluster<uint8_t>(cluster), copy_bytes);
+
+        remain_bytes -= copy_bytes;
+        p += copy_bytes;
+        cluster = fat::NextCluster(cluster);
+    }
+
+    using Func = void ();
+    auto f = reinterpret_cast<Func *>(&file_buf[0]);
+    f();
 }
 
 Rectangle<int> Terminal::historyUpDown(int direction) {
@@ -296,6 +323,9 @@ void TerminalTask(uint64_t task_id, int64_t data) {
             __asm__("sti");
             continue;
         }
+
+        // prevent os stall
+        __asm__("sti");
 
         switch (msg->type) {
         case Message::kTimerTimeout:

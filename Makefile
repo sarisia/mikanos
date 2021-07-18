@@ -33,7 +33,7 @@ debug: run
 
 .PHONY: clean
 clean:
-	rm *.img
+	rm -f *.img
 	make -C src/kernel clean
 	make -C src/apps clean
 

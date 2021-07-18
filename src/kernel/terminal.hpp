@@ -37,7 +37,7 @@ private:
     void print(const char *s);
     void print(char s);
     void executeLine();
-    void executeFile(const fat::DirectoryEntry &file_entry);
+    void executeFile(const fat::DirectoryEntry &file_entry, char *command, char *first_arg);
     Rectangle<int> historyUpDown(int direction);
 };
 

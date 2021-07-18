@@ -10,6 +10,46 @@
 #include "pci.hpp"
 #include "fat.hpp"
 #include "terminal.hpp"
+#include "elf.hpp"
+
+
+namespace {
+
+std::vector<char *> makeArgVector(char *command, char *first_arg) {
+    std::vector<char *> argv;
+    argv.push_back(command); // argv[0] is command name
+
+    char *p = first_arg;
+    while (true) {
+        while (isspace(p[0])) {
+            ++p;
+        }
+
+        if (p[0] == 0) {
+            // null char, end of first_arg
+            break;
+        }
+
+        // arg string start
+        // add as arg
+        argv.push_back(p);
+
+        while (p[0] != 0 && !isspace(p[0])) {
+            ++p;
+        }
+        if (p[0] == 0) {
+            break;
+        }
+        // null terminate
+        p[0] = 0;
+        ++p;
+    }
+
+    return argv;
+}
+
+} // namespace
+
 
 Terminal::Terminal() {
     window_ = std::make_shared<ToplevelWindow>(
@@ -247,12 +287,12 @@ void Terminal::executeLine() {
             print(command);
             print("\n");
         } else {
-            executeFile(*file_entry);
+            executeFile(*file_entry, command, first_arg);
         }
     }
 }
 
-void Terminal::executeFile(const fat::DirectoryEntry &file_entry) {
+void Terminal::executeFile(const fat::DirectoryEntry &file_entry, char *command, char *first_arg) {
     auto cluster = file_entry.FirstCluster();
     auto remain_bytes = file_entry.file_size;
 
@@ -269,9 +309,28 @@ void Terminal::executeFile(const fat::DirectoryEntry &file_entry) {
         cluster = fat::NextCluster(cluster);
     }
 
-    using Func = void ();
-    auto f = reinterpret_cast<Func *>(&file_buf[0]);
-    f();
+    // executables can be one of raw, or elf
+    auto elf_header = reinterpret_cast<Elf64_Ehdr *>(&file_buf[0]);
+    if (memcmp(elf_header->e_ident, "\x7f" "ELF", 4) != 0) {
+        // not elf (raw)
+        using Func = void ();
+        auto f = reinterpret_cast<Func *>(&file_buf[0]);
+        f();
+        return;
+    }
+
+    // execute elf
+    auto argv = makeArgVector(command, first_arg);
+    auto entry_addr = elf_header->e_entry;
+    entry_addr += reinterpret_cast<uintptr_t>(&file_buf[0]);
+
+    using Func = int (int, char **);
+    auto f = reinterpret_cast<Func *>(entry_addr);
+    auto ret = f(argv.size(), &argv[0]);
+
+    char s[64];
+    sprintf(s, "app exited (code %d)\n", ret);
+    print(s);
 }
 
 Rectangle<int> Terminal::historyUpDown(int direction) {

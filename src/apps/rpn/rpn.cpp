@@ -1,28 +1,32 @@
-// utilities
+#include <cstring>
+#include <cstdlib>
 
-int strcmp(const char *a, const char *b) {
-    int i = 0;
-    int diff = 0;
 
-    for (; a[i] != 0 && b[i] != 0; ++i) {
-        diff = a[i] - b[i];
-        if (diff) {
-            break;
-        }
-    }
+// // utilities
 
-    return diff;
-}
+// int strcmp(const char *a, const char *b) {
+//     int i = 0;
+//     int diff = 0;
 
-// ascii to long
-long atol(const char *s) {
-    long v = 0;
-    for (int i = 0; s[i] != 0; ++i) {
-        v = v*10 + (s[i]-'0');
-    }
+//     for (; a[i] != 0 && b[i] != 0; ++i) {
+//         diff = a[i] - b[i];
+//         if (diff) {
+//             break;
+//         }
+//     }
 
-    return v;
-}
+//     return diff;
+// }
+
+// // ascii to long
+// long atol(const char *s) {
+//     long v = 0;
+//     for (int i = 0; s[i] != 0; ++i) {
+//         v = v*10 + (s[i]-'0');
+//     }
+
+//     return v;
+// }
 
 
 // stack

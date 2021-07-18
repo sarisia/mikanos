@@ -18,6 +18,9 @@ namespace {
 std::vector<char *> makeArgVector(char *command, char *first_arg) {
     std::vector<char *> argv;
     argv.push_back(command); // argv[0] is command name
+    if (!first_arg) {
+        return argv;
+    }
 
     char *p = first_arg;
     while (true) {

@@ -10,7 +10,7 @@ LDFLAGS += --entry main -z norelro --image-base 0 --static
 all: ${TARGET}
 
 rpn: rpn.o
-	ld.lld $(LDFLAGS) -o $@ $<
+	ld.lld $(LDFLAGS) -o $@ $< -lc -lc++ -lc++abi
 
 %.o: %.cpp
 	clang++ $(CPPFLAGS) $(CXXFLAGS) -o $@ -c $<
